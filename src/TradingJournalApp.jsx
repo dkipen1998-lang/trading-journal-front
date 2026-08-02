@@ -280,7 +280,7 @@ function seedTrades() {
 }
 
 const DEFAULT_SETUPS = ["Pumpt", "Visual", "News"];
-const DEFAULT_TAGS = ["Pumpt", "Visual", "News", "Fakeout", "Momentum"];
+const DEFAULT_TAGS = ["Pumpt", "Visual", "News"];
 
 export default function TradingJournalApp() {
   const [trades, setTrades] = useState([]);
@@ -781,7 +781,7 @@ function TradeRow({ trade, onClick }) {
     <button onClick={onClick} className="tj-card" style={{ display: "flex", width: "100%", textAlign: "left", padding: 13, marginBottom: 10, alignItems: "center", gap: 12 }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 5 }}>
-          <span className="tj-display" style={{ fontWeight: 700, fontSize: 15 }}>{trade.ticker}</span>
+          <span className="tj-display" style={{ fontWeight: 700, fontSize: 15, color: "var(--text)" }}>{trade.ticker}</span>
           <SideBadge side={trade.side} />
           <StatusBadge status={trade.status} />
         </div>
@@ -1029,7 +1029,6 @@ function TradeDetail({ trade, onClose, onEdit, onDelete, onDuplicate, onCloseTra
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 18 }}>
             <Field label="Entry date" value={`${trade.entryDate} ${trade.entryTime || ""}`} />
-            <Field label="Timeframe" value={trade.timeframe} />
             <Field label="Entry price" value={trade.entryPrice} />
             <Field label="Exit price" value={trade.exitPrice} />
             <Field label="Stop loss" value={trade.stopLoss} />
@@ -1303,7 +1302,7 @@ function TradeForm({ mode, initial, setups, setSetups, tags, setTags, onClose, o
               <div style={{ display: "grid", gap: 4, fontSize: 13, color: "var(--text)" }}>
                 <div>Risk: <span className="tj-mono" style={{ color: "var(--accent)" }}>${computedRisk.riskDollar}</span></div>
                 <div>Risk per share: <span className="tj-mono" style={{ color: "var(--text-dim)" }}>${computedRisk.riskPerShare}</span></div>
-                <div>{computedRisk.direction}: <span className="tj-mono" style={{ color: "var(--profit)" }}>{computedRisk.positionSize} units</span></div>
+                <div>{computedRisk.direction}: <span className="tj-mono" style={{ color: "var(--profit)" }}>{computedRisk.positionSize} share(s)</span></div>
               </div>
             ) : (
               <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Enter entry, stop, and risk amount to calculate size.</div>
