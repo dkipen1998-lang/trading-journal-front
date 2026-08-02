@@ -78,7 +78,7 @@ const STYLE = `
   display: inline-flex;
   animation: tj-scroll 22s linear infinite;
 }
-.tj-ticker-item { padding: 0 18px; font-size: 12px; }
+.tj-ticker-item { padding: 0 18px; font-size: 12px; color: #FFFFFF; }
 @keyframes tj-scroll {
   0% { transform: translateX(0); }
   100% { transform: translateX(-50%); }
@@ -229,7 +229,7 @@ function seedTrades() {
   let day = new Date();
   day.setDate(day.getDate() - 30);
   const tickers = ["AAPL", "TSLA", "NVDA", "EURUSD", "BTCUSD", "SPY"];
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < 2; i++) {
     day = new Date(day.getTime() + 1000 * 60 * 60 * 24 * (1 + Math.random() * 1.5));
     const side = Math.random() > 0.5 ? "long" : "short";
     const entry = +(50 + Math.random() * 200).toFixed(2);
@@ -852,13 +852,28 @@ function EmptyState({ text }) {
 
 function Journal({ trades, search, setSearch, onOpenFilter, onOpenDetail, filtersActive, onExport }) {
   const [exportOpen, setExportOpen] = useState(false);
+  const [sortNewest, setSortNewest] = useState(true);
+
+  const sortedTrades = useMemo(() => {
+    return [...trades].sort((a, b) => {
+      const dateA = a.entryDate ? new Date(`${a.entryDate}T${a.entryTime || "00:00"}:00`).getTime() : 0;
+      const dateB = b.entryDate ? new Date(`${b.entryDate}T${b.entryTime || "00:00"}:00`).getTime() : 0;
+      return sortNewest ? dateB - dateA : dateA - dateB;
+    });
+  }, [trades, sortNewest]);
+
   return (
     <div style={{ paddingBottom: 100 }}>
-      <div style={{ padding: "18px 16px 0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ padding: "18px 16px 0", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
         <div className="tj-display" style={{ fontSize: 20, fontWeight: 700 }}>All trades</div>
-        <button className="tj-btn-ghost" style={{ padding: "8px 12px", display: "flex", alignItems: "center", gap: 6, fontSize: 12.5 }} onClick={() => setExportOpen((value) => !value)}>
-          <Download size={14} /> Export
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button className="tj-btn-ghost" style={{ padding: "8px 10px", fontSize: 12.5 }} onClick={() => setSortNewest((value) => !value)}>
+            {sortNewest ? "Newest first" : "Oldest first"}
+          </button>
+          <button className="tj-btn-ghost" style={{ padding: "8px 12px", display: "flex", alignItems: "center", gap: 6, fontSize: 12.5 }} onClick={() => setExportOpen((value) => !value)}>
+            <Download size={14} /> Export
+          </button>
+        </div>
       </div>
       {exportOpen && (
         <div style={{ padding: "8px 16px 0", display: "flex", gap: 8 }}>
@@ -869,8 +884,8 @@ function Journal({ trades, search, setSearch, onOpenFilter, onOpenDetail, filter
       )}
       <SearchBar search={search} setSearch={setSearch} onOpenFilter={onOpenFilter} filtersActive={filtersActive} />
       <div style={{ padding: "0 16px" }}>
-        {trades.length === 0 && <EmptyState text="No trades match your search or filters." />}
-        {trades.map((trade) => <TradeRow key={trade.id} trade={trade} onClick={() => onOpenDetail(trade.id)} />)}
+        {sortedTrades.length === 0 && <EmptyState text="No trades match your search or filters." />}
+        {sortedTrades.map((trade) => <TradeRow key={trade.id} trade={trade} onClick={() => onOpenDetail(trade.id)} />)}
       </div>
     </div>
   );
