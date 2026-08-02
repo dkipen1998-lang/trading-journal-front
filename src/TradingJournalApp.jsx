@@ -683,12 +683,16 @@ function computeStats(trades) {
   const byMonthMap = {};
   chrono.forEach((trade) => {
     const month = (trade.exitDate || "").slice(0, 7);
-    if (!byMonthMap[month]) byMonthMap[month] = { pnl: 0, wins: 0, total: 0 };
+    if (!byMonthMap[month]) byMonthMap[month] = { pnl: 0, total: 0, riskSum: 0 };
     byMonthMap[month].pnl += trade.pnl;
     byMonthMap[month].total += 1;
-    if (trade.pnl > 0) byMonthMap[month].wins += 1;
+    byMonthMap[month].riskSum += Number(trade.riskDollar || 0);
   });
-  const byMonth = Object.entries(byMonthMap).map(([month, value]) => ({ month, pnl: +value.pnl.toFixed(2), winRate: value.total ? +((value.wins / value.total) * 100).toFixed(1) : 0 }));
+  const byMonth = Object.entries(byMonthMap).map(([month, value]) => {
+    const avgRisk = value.total ? value.riskSum / value.total : 0;
+    const winRate = avgRisk ? +(value.pnl / avgRisk * 100).toFixed(1) : 0;
+    return { month, pnl: +value.pnl.toFixed(2), winRate };
+  });
 
   return {
     totalPnl, todayPnl, totalPnlPct, winRate, tradeCount: trades.length, closedCount: closed.length,
@@ -905,8 +909,6 @@ function StatsScreen({ stats, trades }) {
       </div>
 
       <div style={{ padding: "12px 16px 0", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <StatTile label="Total P&L %" value={`${fmt2(stats.totalPnlPct)}%`} />
-        <StatTile label="Expectancy" value={fmt2(stats.expectancy)} />
         <StatTile label="Avg win" value={fmt2(stats.avgWin)} color="var(--profit)" />
         <StatTile label="Avg loss" value={fmt2(stats.avgLoss)} color="var(--loss)" />
         <StatTile label="Long / Short" value={`${stats.longCount} / ${stats.shortCount}`} />
@@ -1125,17 +1127,40 @@ function TradeForm({ mode, initial, setups, setSetups, tags, setTags, onClose, o
     return Math.abs(entryPrice - stopLoss);
   }
 
-  function autoRiskAndSize() {
-    return;
-  }
+  useEffect(() => {
+    const entryPrice = Number(form.entryPrice);
+    const stopLoss = Number(form.stopLoss);
+    const riskDollar = Number(form.riskDollar);
+    if (!Number.isFinite(entryPrice) || entryPrice <= 0 || !Number.isFinite(stopLoss) || stopLoss <= 0 || !Number.isFinite(riskDollar) || riskDollar <= 0) {
+      return;
+    }
+    const riskPerShare = getRiskPerShare(entryPrice, stopLoss, form.side);
+    if (!Number.isFinite(riskPerShare) || riskPerShare <= 0) {
+      return;
+    }
+    const positionSize = Math.max(1, Math.round(riskDollar / riskPerShare));
+    if (String(form.positionSize) !== String(positionSize)) {
+      setValue("positionSize", positionSize);
+    }
+  }, [form.entryPrice, form.stopLoss, form.riskDollar, form.side]);
 
   const computedRisk = (() => {
+    const entryPrice = Number(form.entryPrice);
+    const stopLoss = Number(form.stopLoss);
     const riskDollar = Number(form.riskDollar);
-    if (!Number.isFinite(riskDollar) || riskDollar <= 0) {
+    if (!Number.isFinite(entryPrice) || entryPrice <= 0 || !Number.isFinite(stopLoss) || stopLoss <= 0 || !Number.isFinite(riskDollar) || riskDollar <= 0) {
       return null;
     }
+    const riskPerShare = getRiskPerShare(entryPrice, stopLoss, form.side);
+    if (!Number.isFinite(riskPerShare) || riskPerShare <= 0) {
+      return null;
+    }
+    const positionSize = Math.max(1, Math.round(riskDollar / riskPerShare));
     return {
       riskDollar: +riskDollar.toFixed(2),
+      riskPerShare: +riskPerShare.toFixed(2),
+      positionSize,
+      direction: form.side === "long" ? "Buy" : "Sell",
     };
   })();
 
@@ -1260,16 +1285,18 @@ function TradeForm({ mode, initial, setups, setSetups, tags, setTags, onClose, o
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
             <div />
-            <NumField label="Shares" value={form.positionSize} onChange={(value) => setValue("positionSize", value)} />
+            <NumField label="Position size" value={form.positionSize} onChange={(value) => setValue("positionSize", value)} />
           </div>
           <div className="tj-card" style={{ padding: 10, marginBottom: 12, borderColor: "var(--accent-dim)" }}>
             <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-dim)", marginBottom: 6 }}>Position sizing</div>
             {computedRisk ? (
-              <div style={{ fontSize: 13, color: "var(--text)" }}>
-                Risk: <span className="tj-mono" style={{ color: "var(--accent)" }}>${computedRisk.riskDollar}</span>
+              <div style={{ display: "grid", gap: 4, fontSize: 13, color: "var(--text)" }}>
+                <div>Risk: <span className="tj-mono" style={{ color: "var(--accent)" }}>${computedRisk.riskDollar}</span></div>
+                <div>Risk per share: <span className="tj-mono" style={{ color: "var(--text-dim)" }}>${computedRisk.riskPerShare}</span></div>
+                <div>{computedRisk.direction}: <span className="tj-mono" style={{ color: "var(--profit)" }}>{computedRisk.positionSize} units</span></div>
               </div>
             ) : (
-              <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Enter risk amount to preview it here.</div>
+              <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Enter entry, stop, and risk amount to calculate size.</div>
             )}
           </div>
           <SectionLabel text="Additional" />
