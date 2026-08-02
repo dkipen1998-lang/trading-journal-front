@@ -63,7 +63,7 @@ const STYLE = `
   border-left: 1px solid var(--border);
   border-right: 1px solid var(--border);
   overflow-x: hidden;
-  padding-bottom: 92px;
+  padding-bottom: 112px;
   box-sizing: border-box;
 }
 
@@ -100,9 +100,11 @@ const STYLE = `
   outline: none;
 }
 .tj-input-compact {
-  padding: 8px 10px;
-  font-size: 13px;
-  border-radius: 9px;
+  padding: 7px 9px;
+  font-size: 12.5px;
+  border-radius: 8px;
+  min-height: 34px;
+  box-sizing: border-box;
 }
 .tj-input:focus { border-color: var(--accent); }
 .tj-input::placeholder { color: var(--text-faint); }
@@ -148,18 +150,20 @@ const STYLE = `
 @media (max-width: 460px) { .tj-fab { right: 18px; } }
 
 .tj-navbar {
-  position: sticky;
+  position: fixed;
   bottom: 0;
-  left: 0;
-  right: 0;
-  margin-top: auto;
-  background: rgba(11, 13, 16, 0.55);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 420px;
+  background: rgba(11, 13, 16, 0.7);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border-top: 1px solid rgba(255,255,255,0.08);
   display: flex;
   padding: 10px 0 calc(10px + env(safe-area-inset-bottom));
   z-index: 30;
+  box-sizing: border-box;
 }
 .tj-navitem {
   flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
@@ -219,7 +223,7 @@ function calcPnl(t) {
 }
 
 function seedTrades() {
-  const setups = ["Pumpt", "Visual","News"];
+  const setups = ["Pumpt", "Visual", "News"];
   const tfs = ["5m", "15m", "1H", "4H"];
   const out = [];
   let day = new Date();
@@ -1106,61 +1110,33 @@ function TradeForm({ mode, initial, setups, setSetups, tags, setTags, onClose, o
   const [newTag, setNewTag] = useState("");
   const [editingSetup, setEditingSetup] = useState(null);
   const [editingSetupValue, setEditingSetupValue] = useState("");
+  const [editingTag, setEditingTag] = useState(null);
+  const [editingTagValue, setEditingTagValue] = useState("");
   const fileRef = useRef();
 
   function setValue(key, value) { setForm((prev) => ({ ...prev, [key]: value })); }
   function toggleTag(tag) { setForm((prev) => ({ ...prev, tags: prev.tags.includes(tag) ? prev.tags.filter((item) => item !== tag) : [...prev.tags, tag] })); }
 
+  function getRiskPerShare(entryPrice, stopLoss, side) {
+    if (!Number.isFinite(entryPrice) || !Number.isFinite(stopLoss)) return null;
+    if (side === "short") {
+      return Math.abs(stopLoss - entryPrice);
+    }
+    return Math.abs(entryPrice - stopLoss);
+  }
+
   function autoRiskAndSize() {
-    const entryPrice = Number(form.entryPrice);
-    const stopLoss = Number(form.stopLoss);
-    const positionSize = Number(form.positionSize);
-    const riskDollar = Number(form.riskDollar);
-    const riskPercent = Number(form.riskPercent);
-    const riskPerShare = Math.abs(entryPrice - stopLoss);
-
-    if (!Number.isFinite(entryPrice) || !Number.isFinite(stopLoss) || !Number.isFinite(riskPerShare) || riskPerShare <= 0) {
-      return;
-    }
-
-    if (Number.isFinite(positionSize) && positionSize > 0 && (!Number.isFinite(riskDollar) || riskDollar <= 0)) {
-      setValue("riskDollar", +(riskPerShare * positionSize).toFixed(2));
-      return;
-    }
-
-    if (Number.isFinite(riskDollar) && riskDollar > 0) {
-      setValue("positionSize", +(riskDollar / riskPerShare).toFixed(2));
-      return;
-    }
-
-    if (Number.isFinite(riskPercent) && riskPercent > 0) {
-      const riskCapital = 10000 * (riskPercent / 100);
-      setValue("positionSize", +(riskCapital / riskPerShare).toFixed(2));
-    }
+    return;
   }
 
   const computedRisk = (() => {
-    const entryPrice = Number(form.entryPrice);
-    const stopLoss = Number(form.stopLoss);
     const riskDollar = Number(form.riskDollar);
-    const positionSize = Number(form.positionSize);
-    const riskPerShare = Math.abs(entryPrice - stopLoss);
-    if (!Number.isFinite(entryPrice) || !Number.isFinite(stopLoss) || !Number.isFinite(riskPerShare) || riskPerShare <= 0) {
+    if (!Number.isFinite(riskDollar) || riskDollar <= 0) {
       return null;
     }
-    if (Number.isFinite(riskDollar) && riskDollar > 0) {
-      return {
-        riskDollar: +riskDollar.toFixed(2),
-        shares: +(riskDollar / riskPerShare).toFixed(2),
-      };
-    }
-    if (Number.isFinite(positionSize) && positionSize > 0) {
-      return {
-        riskDollar: +(riskPerShare * positionSize).toFixed(2),
-        shares: +positionSize.toFixed(2),
-      };
-    }
-    return null;
+    return {
+      riskDollar: +riskDollar.toFixed(2),
+    };
   })();
 
   function addSetup() {
@@ -1193,11 +1169,30 @@ function TradeForm({ mode, initial, setups, setSetups, tags, setTags, onClose, o
 
   function deleteSetup(setupToDelete) {
     if (!setupToDelete) return;
+    const shouldRemoveCurrent = form.setup === setupToDelete;
     setSetups((prev) => prev.filter((setup) => setup !== setupToDelete));
-    if (form.setup === setupToDelete) {
-      const nextSetup = setups.find((setup) => setup !== setupToDelete) || "";
-      setValue("setup", nextSetup);
+    if (shouldRemoveCurrent) {
+      setValue("setup", "");
     }
+  }
+
+  function saveTagEdit() {
+    const value = editingTagValue.trim().replace(/\s+/g, " ");
+    if (!value || !editingTag) return;
+    const exists = tags.some((tag) => tag.toLowerCase() === value.toLowerCase() && tag !== editingTag);
+    if (exists) return;
+    setTags((prev) => prev.map((tag) => (tag === editingTag ? value : tag)));
+    if (form.tags.includes(editingTag)) {
+      setForm((prev) => ({ ...prev, tags: prev.tags.map((tag) => (tag === editingTag ? value : tag)) }));
+    }
+    setEditingTag(null);
+    setEditingTagValue("");
+  }
+
+  function deleteTag(tagToDelete) {
+    if (!tagToDelete) return;
+    setTags((prev) => prev.filter((tag) => tag !== tagToDelete));
+    setForm((prev) => ({ ...prev, tags: prev.tags.filter((tag) => tag !== tagToDelete) }));
   }
 
   function addTag() {
@@ -1256,25 +1251,25 @@ function TradeForm({ mode, initial, setups, setSetups, tags, setTags, onClose, o
 
           <SectionLabel text="Entry" />
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-            <NumField label="Entry price" value={form.entryPrice} onChange={(value) => setValue("entryPrice", value)} onBlur={autoRiskAndSize} />
-            <NumField label="Stop loss" value={form.stopLoss} onChange={(value) => setValue("stopLoss", value)} onBlur={autoRiskAndSize} />
+            <NumField label="Entry price" value={form.entryPrice} onChange={(value) => setValue("entryPrice", value)} />
+            <NumField label="Stop loss" value={form.stopLoss} onChange={(value) => setValue("stopLoss", value)} />
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
             <NumField label="Take profit" value={form.takeProfit} onChange={(value) => setValue("takeProfit", value)} />
-            <NumField label="Risk ($)" value={form.riskDollar} onChange={(value) => setValue("riskDollar", value)} onBlur={autoRiskAndSize} />
+            <NumField label="Risk ($)" value={form.riskDollar} onChange={(value) => setValue("riskDollar", value)} />
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-            <NumField label="Risk (%)" value={form.riskPercent} onChange={(value) => setValue("riskPercent", value)} onBlur={autoRiskAndSize} />
-            <NumField label="Shares" value={form.positionSize} onChange={(value) => setValue("positionSize", value)} onBlur={autoRiskAndSize} />
+            <div />
+            <NumField label="Shares" value={form.positionSize} onChange={(value) => setValue("positionSize", value)} />
           </div>
           <div className="tj-card" style={{ padding: 10, marginBottom: 12, borderColor: "var(--accent-dim)" }}>
             <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-dim)", marginBottom: 6 }}>Position sizing</div>
             {computedRisk ? (
               <div style={{ fontSize: 13, color: "var(--text)" }}>
-                Risk: <span className="tj-mono" style={{ color: "var(--accent)" }}>${computedRisk.riskDollar}</span> · Shares: <span className="tj-mono" style={{ color: "var(--accent)" }}>{computedRisk.shares}</span>
+                Risk: <span className="tj-mono" style={{ color: "var(--accent)" }}>${computedRisk.riskDollar}</span>
               </div>
             ) : (
-              <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Enter entry, stop loss, and risk to calculate shares.</div>
+              <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Enter risk amount to preview it here.</div>
             )}
           </div>
           <SectionLabel text="Additional" />
@@ -1306,9 +1301,20 @@ function TradeForm({ mode, initial, setups, setSetups, tags, setTags, onClose, o
             <label className="tj-label">Tags</label>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
               {tags.map((tag) => (
-                <button key={tag} className={cls("tj-chip", form.tags.includes(tag) && "on")} onClick={() => toggleTag(tag)}>{tag}</button>
+                <div key={tag} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <button className={cls("tj-chip", form.tags.includes(tag) && "on")} onClick={() => toggleTag(tag)}>{tag}</button>
+                  <button className="tj-btn-ghost" style={{ padding: "4px 8px", fontSize: 12 }} onClick={() => { setEditingTag(tag); setEditingTagValue(tag); }}>Edit</button>
+                  <button className="tj-btn-ghost" style={{ padding: "4px 8px", fontSize: 12, color: "var(--loss)" }} onClick={() => deleteTag(tag)}>Delete</button>
+                </div>
               ))}
             </div>
+            {editingTag && (
+              <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                <input className="tj-input tj-input-compact" value={editingTagValue} onChange={(event) => setEditingTagValue(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); saveTagEdit(); } }} />
+                <button className="tj-btn-ghost" onClick={saveTagEdit}>Save</button>
+                <button className="tj-btn-ghost" onClick={() => { setEditingTag(null); setEditingTagValue(""); }}>Cancel</button>
+              </div>
+            )}
             <div style={{ display: "flex", gap: 6 }}>
               <input className="tj-input tj-input-compact" placeholder="Add new tag…" value={newTag} onChange={(event) => setNewTag(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addTag(); } }} />
               <button className="tj-btn-ghost" onClick={addTag}>Add</button>
@@ -1354,7 +1360,7 @@ function NumField({ label, value, onChange, onBlur }) {
   return (
     <div>
       <label className="tj-label">{label}</label>
-      <input className="tj-input tj-input-compact tj-mono" type="number" inputMode="decimal" value={value} onChange={(event) => onChange(event.target.value)} onBlur={onBlur} placeholder="0.00" />
+      <input className="tj-input tj-input-compact tj-mono" type="number" inputMode="decimal" value={value} onChange={(event) => onChange(event.target.value)} onBlur={onBlur} placeholder="0.00" style={{ minHeight: 30, padding: "6px 8px", fontSize: 12.5 }} />
     </div>
   );
 }
