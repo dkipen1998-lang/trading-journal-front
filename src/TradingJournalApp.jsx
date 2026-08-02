@@ -97,6 +97,11 @@ const STYLE = `
   width: 100%;
   outline: none;
 }
+.tj-input-compact {
+  padding: 8px 10px;
+  font-size: 13px;
+  border-radius: 9px;
+}
 .tj-input:focus { border-color: var(--accent); }
 .tj-input::placeholder { color: var(--text-faint); }
 .tj-label {
@@ -285,9 +290,16 @@ export default function TradingJournalApp() {
     (async () => {
       try {
         const params = new URLSearchParams(window.location.search);
-        const initData = params.get("tgWebAppData") || "";
+        const telegramApp = typeof window !== "undefined" ? window.Telegram?.WebApp : null;
+        const initData = telegramApp?.initData || params.get("tgWebAppData") || params.get("initData") || "";
+
         if (initData) {
           await loginWithTelegram(initData);
+        }
+
+        if (telegramApp) {
+          telegramApp.ready();
+          telegramApp.expand();
         }
 
         const remoteTrades = await fetchTrades();
@@ -1039,9 +1051,58 @@ function TradeForm({ mode, initial, setups, setSetups, tags, setTags, onClose, o
   function setValue(key, value) { setForm((prev) => ({ ...prev, [key]: value })); }
   function toggleTag(tag) { setForm((prev) => ({ ...prev, tags: prev.tags.includes(tag) ? prev.tags.filter((item) => item !== tag) : [...prev.tags, tag] })); }
 
-  function autoRisk() {
-    const entryPrice = Number(form.entryPrice), stopLoss = Number(form.stopLoss), positionSize = Number(form.positionSize);
-    if (entryPrice && stopLoss && positionSize) setValue("riskDollar", +(Math.abs(entryPrice - stopLoss) * positionSize).toFixed(2));
+  function autoRiskAndSize() {
+    const entryPrice = Number(form.entryPrice);
+    const stopLoss = Number(form.stopLoss);
+    const positionSize = Number(form.positionSize);
+    const riskDollar = Number(form.riskDollar);
+    const riskPercent = Number(form.riskPercent);
+    const riskPerShare = Math.abs(entryPrice - stopLoss);
+
+    if (!Number.isFinite(entryPrice) || !Number.isFinite(stopLoss) || !Number.isFinite(riskPerShare) || riskPerShare <= 0) {
+      return;
+    }
+
+    if (Number.isFinite(positionSize) && positionSize > 0 && (!Number.isFinite(riskDollar) || riskDollar <= 0)) {
+      setValue("riskDollar", +(riskPerShare * positionSize).toFixed(2));
+      return;
+    }
+
+    if (Number.isFinite(riskDollar) && riskDollar > 0) {
+      setValue("positionSize", +(riskDollar / riskPerShare).toFixed(2));
+      return;
+    }
+
+    if (Number.isFinite(riskPercent) && riskPercent > 0) {
+      const riskCapital = 10000 * (riskPercent / 100);
+      setValue("positionSize", +(riskCapital / riskPerShare).toFixed(2));
+    }
+  }
+
+  function addSetup() {
+    const value = newSetup.trim();
+    if (!value) return;
+    const normalized = value.replace(/\s+/g, " ");
+    const exists = setups.some((setup) => setup.toLowerCase() === normalized.toLowerCase());
+    if (exists) {
+      setValue("setup", normalized);
+      setNewSetup("");
+      return;
+    }
+    setSetups((prev) => [...prev, normalized]);
+    setValue("setup", normalized);
+    setNewSetup("");
+  }
+
+  function addTag() {
+    const value = newTag.trim();
+    if (!value) return;
+    const normalized = value.replace(/\s+/g, " ");
+    if (!tags.includes(normalized)) {
+      setTags((prev) => [...prev, normalized]);
+    }
+    toggleTag(normalized);
+    setNewTag("");
   }
 
   function onImage(event) {
@@ -1066,7 +1127,7 @@ function TradeForm({ mode, initial, setups, setSetups, tags, setTags, onClose, o
           <Row2>
             <div>
               <label className="tj-label">Ticker</label>
-              <input className="tj-input" placeholder="AAPL" value={form.ticker} onChange={(event) => setValue("ticker", event.target.value.toUpperCase())} />
+              <input className="tj-input tj-input-compact" placeholder="AAPL" value={form.ticker} onChange={(event) => setValue("ticker", event.target.value.toUpperCase())} />
             </div>
             <div>
               <label className="tj-label">Type</label>
@@ -1079,26 +1140,26 @@ function TradeForm({ mode, initial, setups, setSetups, tags, setTags, onClose, o
           <Row2>
             <div>
               <label className="tj-label">Date</label>
-              <input type="date" className="tj-input" value={form.entryDate} onChange={(event) => setValue("entryDate", event.target.value)} />
+              <input type="date" className="tj-input tj-input-compact" value={form.entryDate} onChange={(event) => setValue("entryDate", event.target.value)} />
             </div>
             <div>
               <label className="tj-label">Time in</label>
-              <input type="time" className="tj-input" value={form.entryTime} onChange={(event) => setValue("entryTime", event.target.value)} />
+              <input type="time" className="tj-input tj-input-compact" value={form.entryTime} onChange={(event) => setValue("entryTime", event.target.value)} />
             </div>
           </Row2>
 
           <SectionLabel text="Entry" />
           <Row2>
-            <NumField label="Entry price" value={form.entryPrice} onChange={(value) => setValue("entryPrice", value)} onBlur={autoRisk} />
-            <NumField label="Stop loss" value={form.stopLoss} onChange={(value) => setValue("stopLoss", value)} onBlur={autoRisk} />
+            <NumField label="Entry price" value={form.entryPrice} onChange={(value) => setValue("entryPrice", value)} onBlur={autoRiskAndSize} />
+            <NumField label="Stop loss" value={form.stopLoss} onChange={(value) => setValue("stopLoss", value)} onBlur={autoRiskAndSize} />
           </Row2>
           <Row2>
             <NumField label="Take profit" value={form.takeProfit} onChange={(value) => setValue("takeProfit", value)} />
-            <NumField label="Position size" value={form.positionSize} onChange={(value) => setValue("positionSize", value)} onBlur={autoRisk} />
+            <NumField label="Position size" value={form.positionSize} onChange={(value) => setValue("positionSize", value)} onBlur={autoRiskAndSize} />
           </Row2>
           <Row2>
-            <NumField label="Risk ($)" value={form.riskDollar} onChange={(value) => setValue("riskDollar", value)} />
-            <NumField label="Risk (%)" value={form.riskPercent} onChange={(value) => setValue("riskPercent", value)} />
+            <NumField label="Risk ($)" value={form.riskDollar} onChange={(value) => setValue("riskDollar", value)} onBlur={autoRiskAndSize} />
+            <NumField label="Risk (%)" value={form.riskPercent} onChange={(value) => setValue("riskPercent", value)} onBlur={autoRiskAndSize} />
           </Row2>
           <div style={{ marginBottom: 14 }}>
             <label className="tj-label">Timeframe</label>
@@ -1118,8 +1179,8 @@ function TradeForm({ mode, initial, setups, setSetups, tags, setTags, onClose, o
               ))}
             </div>
             <div style={{ display: "flex", gap: 6 }}>
-              <input className="tj-input" placeholder="Add new setup…" value={newSetup} onChange={(event) => setNewSetup(event.target.value)} />
-              <button className="tj-btn-ghost" onClick={() => { if (newSetup.trim()) { setSetups((prev) => [...prev, newSetup.trim()]); setValue("setup", newSetup.trim()); setNewSetup(""); } }}>Add</button>
+              <input className="tj-input tj-input-compact" placeholder="Add new setup…" value={newSetup} onChange={(event) => setNewSetup(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addSetup(); } }} />
+              <button className="tj-btn-ghost" onClick={addSetup}>Add</button>
             </div>
           </div>
 
@@ -1131,14 +1192,14 @@ function TradeForm({ mode, initial, setups, setSetups, tags, setTags, onClose, o
               ))}
             </div>
             <div style={{ display: "flex", gap: 6 }}>
-              <input className="tj-input" placeholder="Add new tag…" value={newTag} onChange={(event) => setNewTag(event.target.value)} />
-              <button className="tj-btn-ghost" onClick={() => { if (newTag.trim()) { setTags((prev) => [...prev, newTag.trim()]); toggleTag(newTag.trim()); setNewTag(""); } }}>Add</button>
+              <input className="tj-input tj-input-compact" placeholder="Add new tag…" value={newTag} onChange={(event) => setNewTag(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addTag(); } }} />
+              <button className="tj-btn-ghost" onClick={addTag}>Add</button>
             </div>
           </div>
 
           <div style={{ marginBottom: 14 }}>
             <label className="tj-label">Notes</label>
-            <textarea className="tj-input" rows={4} placeholder="Trade thesis, context, plan…" value={form.notes} onChange={(event) => setValue("notes", event.target.value)} />
+            <textarea className="tj-input tj-input-compact" rows={3} placeholder="Trade thesis, context, plan…" value={form.notes} onChange={(event) => setValue("notes", event.target.value)} />
           </div>
 
           <div style={{ marginBottom: 20 }}>
@@ -1175,7 +1236,7 @@ function NumField({ label, value, onChange, onBlur }) {
   return (
     <div>
       <label className="tj-label">{label}</label>
-      <input className="tj-input tj-mono" type="number" inputMode="decimal" value={value} onChange={(event) => onChange(event.target.value)} onBlur={onBlur} placeholder="0.00" />
+      <input className="tj-input tj-input-compact tj-mono" type="number" inputMode="decimal" value={value} onChange={(event) => onChange(event.target.value)} onBlur={onBlur} placeholder="0.00" />
     </div>
   );
 }
