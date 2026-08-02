@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { loginWithTelegram, fetchTrades, createTrade, updateTrade, closeTrade, deleteTrade, duplicateTrade } from "./api";
 import {
   Plus, Search, SlidersHorizontal, X, Edit2, Trash2, Copy, Camera,
-  ChevronRight, Home, BookOpen, BarChart2, Download,
+  ChevronRight, Home, BookOpen, BarChart2, Download, Eye,
   ArrowUpRight, ArrowDownRight, Trophy, Skull, Flame
 } from "lucide-react";
 import {
@@ -63,6 +63,8 @@ const STYLE = `
   border-left: 1px solid var(--border);
   border-right: 1px solid var(--border);
   overflow-x: hidden;
+  padding-bottom: 92px;
+  box-sizing: border-box;
 }
 
 .tj-ticker-wrap {
@@ -146,10 +148,15 @@ const STYLE = `
 @media (max-width: 460px) { .tj-fab { right: 18px; } }
 
 .tj-navbar {
-  position: sticky; bottom: 0; left: 0; right: 0;
-  background: rgba(20,24,29,0.92);
-  backdrop-filter: blur(10px);
-  border-top: 1px solid var(--border);
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  margin-top: auto;
+  background: rgba(11, 13, 16, 0.55);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-top: 1px solid rgba(255,255,255,0.08);
   display: flex;
   padding: 10px 0 calc(10px + env(safe-area-inset-bottom));
   z-index: 30;
@@ -212,7 +219,7 @@ function calcPnl(t) {
 }
 
 function seedTrades() {
-  const setups = ["ORB", "Breakout", "Pullback", "Reversal"];
+  const setups = ["Pumpt", "Visual","News"];
   const tfs = ["5m", "15m", "1H", "4H"];
   const out = [];
   let day = new Date();
@@ -268,13 +275,15 @@ function seedTrades() {
   return out.sort((a, b) => b.createdAt - a.createdAt);
 }
 
-const DEFAULT_SETUPS = ["ORB", "Breakout", "Pullback", "Reversal", "Momentum"];
-const DEFAULT_TAGS = ["ORB", "Breakout", "Pullback", "Reversal", "Momentum", "News", "Fakeout"];
+const DEFAULT_SETUPS = ["Pumpt", "Visual", "News"];
+const DEFAULT_TAGS = ["Pumpt", "Visual", "News", "Fakeout", "Momentum"];
 
 export default function TradingJournalApp() {
   const [trades, setTrades] = useState([]);
   const [tags, setTags] = useState(DEFAULT_TAGS);
   const [setups, setSetups] = useState(DEFAULT_SETUPS);
+  const [watchlist, setWatchlist] = useState([]);
+  const [watchlistInput, setWatchlistInput] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState("dashboard");
   const [toast, setToast] = useState(null);
@@ -284,7 +293,7 @@ export default function TradingJournalApp() {
   const [editTrade, setEditTrade] = useState(null);
   const [search, setSearch] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
-  const [filters, setFilters] = useState({ status: "all", side: "all", result: "all", setup: "all", timeframe: "all", tag: "all" });
+  const [filters, setFilters] = useState({ status: "all", side: "all", result: "all", setup: "all", tag: "all" });
 
   useEffect(() => {
     (async () => {
@@ -310,17 +319,21 @@ export default function TradingJournalApp() {
           const t = await STORAGE.get("tj-trades");
           const g = await STORAGE.get("tj-tags");
           const s = await STORAGE.get("tj-setups");
+          const w = await STORAGE.get("tj-watchlist");
           setTrades(t ? JSON.parse(t.value) : seedTrades());
           setTags(g ? JSON.parse(g.value) : DEFAULT_TAGS);
           setSetups(s ? JSON.parse(s.value) : DEFAULT_SETUPS);
+          setWatchlist(w ? JSON.parse(w.value) : []);
         }
       } catch (e) {
         const t = await STORAGE.get("tj-trades");
         const g = await STORAGE.get("tj-tags");
         const s = await STORAGE.get("tj-setups");
+        const w = await STORAGE.get("tj-watchlist");
         setTrades(t ? JSON.parse(t.value) : seedTrades());
         setTags(g ? JSON.parse(g.value) : DEFAULT_TAGS);
         setSetups(s ? JSON.parse(s.value) : DEFAULT_SETUPS);
+        setWatchlist(w ? JSON.parse(w.value) : []);
       }
       setLoaded(true);
     })();
@@ -338,10 +351,25 @@ export default function TradingJournalApp() {
     if (!loaded) return;
     STORAGE.set("tj-setups", JSON.stringify(setups)).catch(() => {});
   }, [setups, loaded]);
+  useEffect(() => {
+    if (!loaded) return;
+    STORAGE.set("tj-watchlist", JSON.stringify(watchlist)).catch(() => {});
+  }, [watchlist, loaded]);
 
   function showToast(msg) {
     setToast(msg);
     setTimeout(() => setToast(null), 1800);
+  }
+
+  function addTicker() {
+    const value = watchlistInput.trim().toUpperCase();
+    if (!value) return;
+    setWatchlist((prev) => (prev.includes(value) ? prev : [...prev, value]));
+    setWatchlistInput("");
+  }
+
+  function removeTicker(symbol) {
+    setWatchlist((prev) => prev.filter((item) => item !== symbol));
   }
 
   async function addTrade(t) {
@@ -451,7 +479,6 @@ export default function TradingJournalApp() {
     if (filters.side !== "all") out = out.filter((trade) => trade.side === filters.side);
     if (filters.result !== "all") out = out.filter((trade) => trade.status === "closed" && (filters.result === "profit" ? trade.pnl > 0 : trade.pnl <= 0));
     if (filters.setup !== "all") out = out.filter((trade) => trade.setup === filters.setup);
-    if (filters.timeframe !== "all") out = out.filter((trade) => trade.timeframe === filters.timeframe);
     if (filters.tag !== "all") out = out.filter((trade) => (trade.tags || []).includes(filters.tag));
     return out;
   }, [trades, search, filters]);
@@ -500,6 +527,26 @@ export default function TradingJournalApp() {
           />
         )}
         {tab === "stats" && <StatsScreen stats={stats} trades={trades} />}
+        {tab === "watchlist" && (
+          <div style={{ padding: 18 }}>
+            <div className="tj-display" style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Watchlist</div>
+            <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 12 }}>Track your favorite tickers in one place.</div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <input className="tj-input tj-input-compact" placeholder="Add ticker (AAPL)" value={watchlistInput} onChange={(event) => setWatchlistInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addTicker(); } }} />
+              <button className="tj-btn-primary" onClick={addTicker}>Add</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {watchlist.length === 0 ? (
+                <div className="tj-card" style={{ padding: 16, color: "var(--text-dim)", fontSize: 13 }}>No tickers yet.</div>
+              ) : watchlist.map((symbol) => (
+                <div key={symbol} className="tj-card" style={{ padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div className="tj-display" style={{ fontSize: 16, fontWeight: 700 }}>{symbol}</div>
+                  <button className="tj-btn-ghost" style={{ padding: "6px 10px", fontSize: 12 }} onClick={() => removeTicker(symbol)}>Remove</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <button className="tj-fab" onClick={() => setNewOpen(true)} aria-label="New trade">
           <Plus size={26} strokeWidth={2.4} />
@@ -508,6 +555,7 @@ export default function TradingJournalApp() {
         <nav className="tj-navbar">
           <NavItem icon={Home} label="Dashboard" active={tab === "dashboard"} onClick={() => setTab("dashboard")} />
           <NavItem icon={BookOpen} label="Journal" active={tab === "journal"} onClick={() => setTab("journal")} />
+          <NavItem icon={Eye} label="Watchlist" active={tab === "watchlist"} onClick={() => setTab("watchlist")} />
           <NavItem icon={BarChart2} label="Stats" active={tab === "stats"} onClick={() => setTab("stats")} />
         </nav>
       </div>
@@ -583,10 +631,20 @@ export default function TradingJournalApp() {
   );
 }
 
+function getTodayKey(date = new Date()) {
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function computeStats(trades) {
   const closed = trades.filter((trade) => trade.status === "closed" && trade.pnl != null);
   const open = trades.filter((trade) => trade.status === "open");
   const totalPnl = closed.reduce((sum, trade) => sum + trade.pnl, 0);
+  const todayKey = getTodayKey();
+  const todayPnl = closed.reduce((sum, trade) => (trade.exitDate === todayKey ? sum + trade.pnl : sum), 0);
   const totalPnlPct = closed.reduce((sum, trade) => sum + (trade.pnlPercent || 0), 0);
   const wins = closed.filter((trade) => trade.pnl > 0);
   const losses = closed.filter((trade) => trade.pnl <= 0);
@@ -629,7 +687,7 @@ function computeStats(trades) {
   const byMonth = Object.entries(byMonthMap).map(([month, value]) => ({ month, pnl: +value.pnl.toFixed(2), winRate: value.total ? +((value.wins / value.total) * 100).toFixed(1) : 0 }));
 
   return {
-    totalPnl, totalPnlPct, winRate, tradeCount: trades.length, closedCount: closed.length,
+    totalPnl, todayPnl, totalPnlPct, winRate, tradeCount: trades.length, closedCount: closed.length,
     openCount: open.length, longCount: trades.filter((trade) => trade.side === "long").length,
     shortCount: trades.filter((trade) => trade.side === "short").length,
     avgWin, avgLoss, profitFactor, expectancy, avgR, best, worst, maxWinStreak, maxLossStreak,
@@ -648,7 +706,7 @@ function NavItem({ icon: Icon, label, active, onClick }) {
 
 function TickerTape({ stats }) {
   const items = [
-    { label: "TODAY", value: `${stats.totalPnl >= 0 ? "+" : ""}${fmt2(stats.totalPnl)}`, color: stats.totalPnl >= 0 ? "var(--profit)" : "var(--loss)" },
+    { label: "TODAY", value: `${stats.todayPnl >= 0 ? "+" : ""}${fmt2(stats.todayPnl)}`, color: stats.todayPnl >= 0 ? "var(--profit)" : "var(--loss)" },
     { label: "WIN RATE", value: `${fmt2(stats.winRate)}%`, color: "var(--text)" },
     { label: "OPEN", value: `${stats.openCount}`, color: "var(--long)" },
     { label: "TRADES", value: `${stats.tradeCount}`, color: "var(--text)" },
@@ -749,8 +807,8 @@ function Dashboard({ stats, search, setSearch, onOpenFilter, onOpenDetail, filte
 
       <div style={{ padding: "14px 16px 4px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <div className="tj-card" style={{ padding: 14 }}>
-          <div className="tj-label" style={{ marginBottom: 8 }}>Total P&L</div>
-          <PnlText value={stats.totalPnl} size={20} />
+          <div className="tj-label" style={{ marginBottom: 8 }}>Today P&L</div>
+          <PnlText value={stats.todayPnl} size={20} />
         </div>
         <div className="tj-card" style={{ padding: 14 }}>
           <div className="tj-label" style={{ marginBottom: 8 }}>Win Rate</div>
@@ -1046,6 +1104,8 @@ function TradeForm({ mode, initial, setups, setSetups, tags, setTags, onClose, o
   });
   const [newSetup, setNewSetup] = useState("");
   const [newTag, setNewTag] = useState("");
+  const [editingSetup, setEditingSetup] = useState(null);
+  const [editingSetupValue, setEditingSetupValue] = useState("");
   const fileRef = useRef();
 
   function setValue(key, value) { setForm((prev) => ({ ...prev, [key]: value })); }
@@ -1079,6 +1139,30 @@ function TradeForm({ mode, initial, setups, setSetups, tags, setTags, onClose, o
     }
   }
 
+  const computedRisk = (() => {
+    const entryPrice = Number(form.entryPrice);
+    const stopLoss = Number(form.stopLoss);
+    const riskDollar = Number(form.riskDollar);
+    const positionSize = Number(form.positionSize);
+    const riskPerShare = Math.abs(entryPrice - stopLoss);
+    if (!Number.isFinite(entryPrice) || !Number.isFinite(stopLoss) || !Number.isFinite(riskPerShare) || riskPerShare <= 0) {
+      return null;
+    }
+    if (Number.isFinite(riskDollar) && riskDollar > 0) {
+      return {
+        riskDollar: +riskDollar.toFixed(2),
+        shares: +(riskDollar / riskPerShare).toFixed(2),
+      };
+    }
+    if (Number.isFinite(positionSize) && positionSize > 0) {
+      return {
+        riskDollar: +(riskPerShare * positionSize).toFixed(2),
+        shares: +positionSize.toFixed(2),
+      };
+    }
+    return null;
+  })();
+
   function addSetup() {
     const value = newSetup.trim();
     if (!value) return;
@@ -1092,6 +1176,28 @@ function TradeForm({ mode, initial, setups, setSetups, tags, setTags, onClose, o
     setSetups((prev) => [...prev, normalized]);
     setValue("setup", normalized);
     setNewSetup("");
+  }
+
+  function saveSetupEdit() {
+    const value = editingSetupValue.trim().replace(/\s+/g, " ");
+    if (!value || !editingSetup) return;
+    const exists = setups.some((setup) => setup.toLowerCase() === value.toLowerCase() && setup !== editingSetup);
+    if (exists) return;
+    setSetups((prev) => prev.map((setup) => (setup === editingSetup ? value : setup)));
+    if (form.setup === editingSetup) {
+      setValue("setup", value);
+    }
+    setEditingSetup(null);
+    setEditingSetupValue("");
+  }
+
+  function deleteSetup(setupToDelete) {
+    if (!setupToDelete) return;
+    setSetups((prev) => prev.filter((setup) => setup !== setupToDelete));
+    if (form.setup === setupToDelete) {
+      const nextSetup = setups.find((setup) => setup !== setupToDelete) || "";
+      setValue("setup", nextSetup);
+    }
   }
 
   function addTag() {
@@ -1149,35 +1255,47 @@ function TradeForm({ mode, initial, setups, setSetups, tags, setTags, onClose, o
           </Row2>
 
           <SectionLabel text="Entry" />
-          <Row2>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
             <NumField label="Entry price" value={form.entryPrice} onChange={(value) => setValue("entryPrice", value)} onBlur={autoRiskAndSize} />
             <NumField label="Stop loss" value={form.stopLoss} onChange={(value) => setValue("stopLoss", value)} onBlur={autoRiskAndSize} />
-          </Row2>
-          <Row2>
-            <NumField label="Take profit" value={form.takeProfit} onChange={(value) => setValue("takeProfit", value)} />
-            <NumField label="Position size" value={form.positionSize} onChange={(value) => setValue("positionSize", value)} onBlur={autoRiskAndSize} />
-          </Row2>
-          <Row2>
-            <NumField label="Risk ($)" value={form.riskDollar} onChange={(value) => setValue("riskDollar", value)} onBlur={autoRiskAndSize} />
-            <NumField label="Risk (%)" value={form.riskPercent} onChange={(value) => setValue("riskPercent", value)} onBlur={autoRiskAndSize} />
-          </Row2>
-          <div style={{ marginBottom: 14 }}>
-            <label className="tj-label">Timeframe</label>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {["1m", "5m", "15m", "1H", "4H", "1D"].map((timeframe) => (
-                <button key={timeframe} className={cls("tj-chip", form.timeframe === timeframe && "on")} onClick={() => setValue("timeframe", timeframe)}>{timeframe}</button>
-              ))}
-            </div>
           </div>
-
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+            <NumField label="Take profit" value={form.takeProfit} onChange={(value) => setValue("takeProfit", value)} />
+            <NumField label="Risk ($)" value={form.riskDollar} onChange={(value) => setValue("riskDollar", value)} onBlur={autoRiskAndSize} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+            <NumField label="Risk (%)" value={form.riskPercent} onChange={(value) => setValue("riskPercent", value)} onBlur={autoRiskAndSize} />
+            <NumField label="Shares" value={form.positionSize} onChange={(value) => setValue("positionSize", value)} onBlur={autoRiskAndSize} />
+          </div>
+          <div className="tj-card" style={{ padding: 10, marginBottom: 12, borderColor: "var(--accent-dim)" }}>
+            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-dim)", marginBottom: 6 }}>Position sizing</div>
+            {computedRisk ? (
+              <div style={{ fontSize: 13, color: "var(--text)" }}>
+                Risk: <span className="tj-mono" style={{ color: "var(--accent)" }}>${computedRisk.riskDollar}</span> · Shares: <span className="tj-mono" style={{ color: "var(--accent)" }}>{computedRisk.shares}</span>
+              </div>
+            ) : (
+              <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Enter entry, stop loss, and risk to calculate shares.</div>
+            )}
+          </div>
           <SectionLabel text="Additional" />
           <div style={{ marginBottom: 14 }}>
             <label className="tj-label">Setup</label>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
               {setups.map((setup) => (
-                <button key={setup} className={cls("tj-chip", form.setup === setup && "on")} onClick={() => setValue("setup", setup)}>{setup}</button>
+                <div key={setup} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <button className={cls("tj-chip", form.setup === setup && "on")} onClick={() => setValue("setup", setup)}>{setup}</button>
+                  <button className="tj-btn-ghost" style={{ padding: "4px 8px", fontSize: 12 }} onClick={() => { setEditingSetup(setup); setEditingSetupValue(setup); }}>Edit</button>
+                  <button className="tj-btn-ghost" style={{ padding: "4px 8px", fontSize: 12, color: "var(--loss)" }} onClick={() => deleteSetup(setup)}>Delete</button>
+                </div>
               ))}
             </div>
+            {editingSetup && (
+              <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                <input className="tj-input tj-input-compact" value={editingSetupValue} onChange={(event) => setEditingSetupValue(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); saveSetupEdit(); } }} />
+                <button className="tj-btn-ghost" onClick={saveSetupEdit}>Save</button>
+                <button className="tj-btn-ghost" onClick={() => { setEditingSetup(null); setEditingSetupValue(""); }}>Cancel</button>
+              </div>
+            )}
             <div style={{ display: "flex", gap: 6 }}>
               <input className="tj-input tj-input-compact" placeholder="Add new setup…" value={newSetup} onChange={(event) => setNewSetup(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addSetup(); } }} />
               <button className="tj-btn-ghost" onClick={addSetup}>Add</button>
@@ -1320,6 +1438,14 @@ function CloseTradeForm({ trade, onClose, onSubmit }) {
 
 function FilterSheet({ filters, setFilters, setups, tags, onClose }) {
   const [local, setLocal] = useState(filters);
+
+  useEffect(() => {
+    setLocal((prev) => ({
+      ...prev,
+      tag: prev.tag && tags.includes(prev.tag) ? prev.tag : "all",
+    }));
+  }, [tags]);
+
   function group(label, key, options) {
     return (
       <div style={{ marginBottom: 18 }}>
@@ -1332,6 +1458,9 @@ function FilterSheet({ filters, setFilters, setups, tags, onClose }) {
       </div>
     );
   }
+
+  const tagOptions = [{ value: "all", label: "All" }, ...tags.map((tag) => ({ value: tag, label: tag }))];
+
   return (
     <div className="tj-sheet-backdrop" onClick={onClose}>
       <div className="tj-sheet tj-scroll-hide" onClick={(event) => event.stopPropagation()}>
@@ -1341,10 +1470,9 @@ function FilterSheet({ filters, setFilters, setups, tags, onClose }) {
           {group("Direction", "side", [{ value: "all", label: "All" }, { value: "long", label: "Long" }, { value: "short", label: "Short" }])}
           {group("Result", "result", [{ value: "all", label: "All" }, { value: "profit", label: "Profitable" }, { value: "loss", label: "Losing" }])}
           {group("Setup", "setup", [{ value: "all", label: "All" }, ...setups.map((setup) => ({ value: setup, label: setup }))])}
-          {group("Timeframe", "timeframe", [{ value: "all", label: "All" }, ...["1m", "5m", "15m", "1H", "4H", "1D"].map((timeframe) => ({ value: timeframe, label: timeframe }))])}
-          {group("Tag", "tag", [{ value: "all", label: "All" }, ...tags.map((tag) => ({ value: tag, label: tag }))])}
+          {group("Tag", "tag", tagOptions)}
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="tj-btn-ghost" style={{ flex: 1 }} onClick={() => { const cleared = { status: "all", side: "all", result: "all", setup: "all", timeframe: "all", tag: "all" }; setLocal(cleared); setFilters(cleared); }}>Clear all</button>
+            <button className="tj-btn-ghost" style={{ flex: 1 }} onClick={() => { const cleared = { status: "all", side: "all", result: "all", setup: "all", tag: "all" }; setLocal(cleared); setFilters(cleared); }}>Clear all</button>
             <button className="tj-btn-primary" style={{ flex: 1 }} onClick={() => { setFilters(local); onClose(); }}>Apply</button>
           </div>
         </div>
