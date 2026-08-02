@@ -683,16 +683,12 @@ function computeStats(trades) {
   const byMonthMap = {};
   chrono.forEach((trade) => {
     const month = (trade.exitDate || "").slice(0, 7);
-    if (!byMonthMap[month]) byMonthMap[month] = { pnl: 0, total: 0, riskSum: 0 };
+    if (!byMonthMap[month]) byMonthMap[month] = { pnl: 0, wins: 0, total: 0 };
     byMonthMap[month].pnl += trade.pnl;
     byMonthMap[month].total += 1;
-    byMonthMap[month].riskSum += Number(trade.riskDollar || 0);
+    if (trade.pnl > 0) byMonthMap[month].wins += 1;
   });
-  const byMonth = Object.entries(byMonthMap).map(([month, value]) => {
-    const avgRisk = value.total ? value.riskSum / value.total : 0;
-    const winRate = avgRisk ? +(value.pnl / avgRisk * 100).toFixed(1) : 0;
-    return { month, pnl: +value.pnl.toFixed(2), winRate };
-  });
+  const byMonth = Object.entries(byMonthMap).map(([month, value]) => ({ month, pnl: +value.pnl.toFixed(2), winRate: value.total ? +((value.wins / value.total) * 100).toFixed(1) : 0 }));
 
   return {
     totalPnl, todayPnl, totalPnlPct, winRate, tradeCount: trades.length, closedCount: closed.length,
@@ -1014,7 +1010,6 @@ function TradeDetail({ trade, onClose, onEdit, onDelete, onDuplicate, onCloseTra
           <div className="tj-card" style={{ padding: 16, marginBottom: 16, textAlign: "center" }}>
             <div className="tj-label">P&L</div>
             <PnlText value={trade.pnl} size={28} />
-            {trade.pnlPercent != null && <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 2 }}>{trade.pnlPercent >= 0 ? "+" : ""}{fmt2(trade.pnlPercent)}% {trade.rMultiple != null && `· ${trade.rMultiple >= 0 ? "+" : ""}${fmt2(trade.rMultiple)}R`}</div>}
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 18 }}>
@@ -1424,22 +1419,21 @@ function CloseTradeForm({ trade, onClose, onSubmit }) {
             <NumField label="Exit price" value={form.exitPrice} onChange={(value) => setValue("exitPrice", value)} />
             <div>
               <label className="tj-label">Exit reason</label>
-              <input className="tj-input" placeholder="TP hit, SL hit…" value={form.exitReason} onChange={(event) => setValue("exitReason", event.target.value)} />
+              <input className="tj-input tj-input-compact" placeholder="TP hit, SL hit…" value={form.exitReason} onChange={(event) => setValue("exitReason", event.target.value)} />
             </div>
           </Row2>
           <Row2>
             <div>
               <label className="tj-label">Close date</label>
-              <input type="date" className="tj-input" value={form.exitDate} onChange={(event) => setValue("exitDate", event.target.value)} />
+              <input type="date" className="tj-input tj-input-compact" value={form.exitDate} onChange={(event) => setValue("exitDate", event.target.value)} />
             </div>
             <div>
               <label className="tj-label">Close time</label>
-              <input type="time" className="tj-input" value={form.exitTime} onChange={(event) => setValue("exitTime", event.target.value)} />
+              <input type="time" className="tj-input tj-input-compact" value={form.exitTime} onChange={(event) => setValue("exitTime", event.target.value)} />
             </div>
           </Row2>
           <Row2>
             <NumField label="PnL ($)" value={form.pnl} onChange={(value) => setValue("pnl", value)} />
-            <NumField label="PnL (%)" value={form.pnlPercent} onChange={(value) => setValue("pnlPercent", value)} />
           </Row2>
           <div style={{ marginBottom: 14, width: "calc(50% - 5px)" }}>
             <NumField label="R-multiple" value={form.rMultiple} onChange={(value) => setValue("rMultiple", value)} />
