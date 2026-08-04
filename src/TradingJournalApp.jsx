@@ -1,15 +1,12 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react";
 import { loginWithTelegram, fetchTrades, createTrade, updateTrade, closeTrade, deleteTrade, duplicateTrade } from "./api";
 import {
   Plus, Search, SlidersHorizontal, X, Edit2, Trash2, Copy, Camera,
   ChevronRight, Home, BookOpen, BarChart2, Download, Eye,
-  ArrowUpRight, ArrowDownRight, Trophy, Skull, Flame
+  ArrowUpRight, ArrowDownRight
 } from "lucide-react";
-import {
-  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
-  BarChart, Bar, LineChart, Line, Cell
-} from "recharts";
-import * as XLSX from "xlsx";
+
+const StatsCharts = lazy(() => import("./StatsCharts"));
 
 const STORAGE = typeof window !== "undefined" && window.storage
   ? window.storage
@@ -25,6 +22,481 @@ const STORAGE = typeof window !== "undefined" && window.storage
         return true;
       },
     };
+
+const LANGUAGE_LABELS = {
+  ru: {
+    journal: "Журнал",
+    dashboard: "Панель",
+    statistics: "Статистика",
+    watchlist: "Список наблюдения",
+    todayPnL: "Профит/убыток сегодня",
+    winRate: "Win rate",
+    profitFactor: "Профит фактор",
+    openTrades: "Открытые сделки",
+    totalIncome: "Общий доход",
+    recentTrades: "Последние сделки",
+    viewAll: "Посмотреть все",
+    noTrades: "Нет сделок по этому фильтру.",
+    searchPlaceholder: "Поиск по тикеру, заметкам, тегам…",
+    filters: "Фильтры",
+    allTime: "За всё время",
+    last7Days: "Последние 7 дней",
+    last30Days: "Последние 30 дней",
+    last90Days: "Последние 90 дней",
+    thisMonth: "Этот месяц",
+    closedTrades: "закрытые сделки",
+    closed: "Закрыто",
+    open: "Открыто",
+    allTrades: "Все сделки",
+    export: "Экспорт",
+    newestFirst: "Сначала новые",
+    oldestFirst: "Сначала старые",
+    loading: "Загрузка журнала…",
+    loadingStats: "Загрузка статистики…",
+    saving: "Сохраняем...",
+    savingTrade: "Сохранение сделки...",
+    dashboardSubtitle: "Ваш торговый стол в одном взгляде",
+    watchlistIntro: "Отслеживайте любимые тикеры в одном месте.",
+    watchlistAddTickerPlaceholder: "Добавить тикер (AAPL)",
+    watchlistCommentPlaceholder: "Комментарий к тикеру",
+    watchlistEmpty: "Тикеры ещё не добавлены.",
+    watchlistRemove: "Удалить",
+    watchlistAddButton: "Добавить тикер",
+    inLabel: "В",
+    exitLabel: "Выход",
+    entryDateLabel: "Дата входа",
+    exitDateLabel: "Дата выхода",
+    entryPriceLabel: "Цена входа",
+    exitPriceLabel: "Цена выхода",
+    stopLossLabel: "Стоп-лосс",
+    takeProfitLabel: "Тейк-профит",
+    positionSizeLabel: "Размер позиции",
+    riskDollarLabel: "Риск $",
+    riskPercentLabel: "Риск %",
+    defaultRiskLabel: "Стандартный риск за сделку ($)",
+    defaultRiskHint: "Используется для статистики и для новых сделок, если риск не указан",
+    riskCountLabel: "Количество рисков",
+    exitReasonLabel: "Причина выхода",
+    tickerToday: "СЕГОДНЯ",
+    tickerWinRate: "WIN RATE",
+    tickerOpen: "ОТКРЫТО",
+    tickerTrades: "СДЕЛОК",
+    tickerPf: "PF",
+    tickerAvgR: "СР. R",
+    tradeAdded: "Сделка добавлена",
+    tradeUpdated: "Сделка обновлена",
+    tradeDeleted: "Сделка удалена",
+    tradeClosed: "Сделка закрыта",
+    tradeDuplicated: "Сделка продублирована",
+    failedAddTrade: "Не удалось добавить сделку",
+    failedUpdateTrade: "Не удалось обновить сделку",
+    failedDeleteTrade: "Не удалось удалить сделку",
+    failedCloseTrade: "Не удалось закрыть сделку",
+    failedDuplicateTrade: "Не удалось продублировать сделку",
+    exportCsv: "CSV экспортирован",
+    exportXlsx: "Excel экспортирован",
+    exportPdf: "PDF экспорт скоро появится — используйте CSV/Excel",
+    pnlLabel: "P&L",
+    tagsLabel: "Теги",
+    notesLabel: "Заметки",
+    postTradeCommentLabel: "Комментарий после сделки",
+    avgWin: "Средний выигрыш",
+    avgLoss: "Средний проигрыш",
+    longShort: "Long / Short",
+    avgR: "Средний R",
+    bestTrade: "Лучшая сделка",
+    worstTrade: "Худшая сделка",
+    winStreak: "Серия побед",
+    lossStreak: "Серия проигрышей",
+    exitScreenshotLabel: "Скриншот выхода",
+    commentAfterTrade: "Комментарий после сделки",
+    exitReasonPlaceholder: "TP hit, SL hit…",
+    rMultipleLabel: "R-мультипликатор",
+    tradeDetails: "Детали сделки",
+    edit: "Редактировать",
+    delete: "Удалить",
+    duplicate: "Дублировать",
+    closeTrade: "Закрыть сделку",
+    addTrade: "Добавить сделку",
+    newTrade: "Новая сделка",
+    editTrade: "Редактировать сделку",
+    basicInfo: "Основная информация",
+    ticker: "Тикер",
+    type: "Тип",
+    date: "Дата",
+    timeIn: "Время входа",
+    entry: "Вход",
+    additional: "Дополнительно",
+    entryPrice: "Цена входа",
+    stopLoss: "Стоп-лосс",
+    takeProfit: "Тейк-профит",
+    riskDollar: "Риск ($)",
+    positionNotional: "Позиционный нотионал",
+    positionSize: "Размер позиции",
+    positionSizing: "Размер позиции",
+    risk: "Риск",
+    riskPerShare: "Риск на акцию",
+    share: "акция",
+    shares: "акций",
+    enterEntryStopRisk: "Введите вход, стоп и сумму риска для расчёта размера позиции.",
+    addNewSetup: "Добавить новую стратегию…",
+    tags: "Теги",
+    addNewTag: "Добавить новый тег…",
+    notes: "Заметки",
+    tradeThesisContextPlan: "Тезис сделки, контекст, план…",
+    entryScreenshot: "Скриншот входа",
+    attachScreenshot: "Прикрепить скриншот",
+    replaceImage: "Заменить изображение",
+    saveTrade: "Сохранить сделку",
+    saveChanges: "Сохранить изменения",
+    saveLabel: "Сохранить",
+    cancelLabel: "Отмена",
+    editLabel: "Редактировать",
+    deleteLabel: "Удалить",
+    addLabel: "Добавить",
+    buy: "Купить",
+    sell: "Продать",
+    language: "Язык",
+    english: "English",
+    ukrainian: "Українська",
+    russian: "Русский",
+    apply: "Применить",
+    clearAll: "Очистить всё",
+    status: "Статус",
+    direction: "Направление",
+    result: "Результат",
+    setup: "Стратегия",
+    tag: "Тег",
+    long: "Long",
+    short: "Short",
+    profitable: "Прибыльные",
+    losing: "Убыточные",
+    openShort: "Открыто",
+    closedShort: "Закрыто",
+    all: "Все",
+    riskCountByDay: "Количество рисков по дням",
+    cumulativePnlByDay: "Накопительный P&L по дням",
+    equityCurve: "Кривая капитала",
+    pnlByDay: "P&L по дням",
+    statisticsTitle: "Статистика",
+    watchlistTitle: "Список наблюдения",
+  },
+  uk: {
+    journal: "Журнал",
+    dashboard: "Дашборд",
+    statistics: "Статистика",
+    watchlist: "Список спостереження",
+    todayPnL: "Профіт/збиток сьогодні",
+    winRate: "Win rate",
+    profitFactor: "Профіт фактор",
+    openTrades: "Відкриті угоди",
+    totalIncome: "Загальний дохід",
+    recentTrades: "Останні угоди",
+    viewAll: "Переглянути всі",
+    noTrades: "Немає угод за цим фільтром.",
+    searchPlaceholder: "Пошук по тикеру, нотатках, тегах…",
+    filters: "Фільтри",
+    allTime: "За весь час",
+    last7Days: "Останні 7 днів",
+    last30Days: "Останні 30 днів",
+    last90Days: "Останні 90 днів",
+    thisMonth: "Цей місяць",
+    closedTrades: "закриті угоди",
+    closed: "Закрито",
+    open: "Відкрито",
+    allTrades: "Усі угоди",
+    export: "Експорт",
+    newestFirst: "Найновіші",
+    oldestFirst: "Найстаріші",
+    loading: "Завантаження журналу…",
+    loadingStats: "Завантаження статистики…",
+    saving: "Зберігаємо...",
+    savingTrade: "Збереження угоди...",
+    dashboardSubtitle: "Ваш торговий стіл одним поглядом",
+    watchlistIntro: "Відстежуйте улюблені тикери в одному місці.",
+    watchlistAddTickerPlaceholder: "Додати тікер (AAPL)",
+    watchlistCommentPlaceholder: "Коментар до тікера",
+    watchlistEmpty: "Тікери ще не додані.",
+    watchlistRemove: "Видалити",
+    watchlistAddButton: "Додати тікер",
+    inLabel: "В",
+    exitLabel: "Вихід",
+    entryDateLabel: "Дата входу",
+    exitDateLabel: "Дата виходу",
+    entryPriceLabel: "Ціна входу",
+    exitPriceLabel: "Ціна виходу",
+    stopLossLabel: "Стоп-лосс",
+    takeProfitLabel: "Тейк-профіт",
+    positionSizeLabel: "Розмір позиції",
+    riskDollarLabel: "Ризик $",
+    riskPercentLabel: "Ризик %",
+    defaultRiskLabel: "Стандартний ризик за угоду ($)",
+    defaultRiskHint: "Використовується для статистики та нових угод, якщо ризик не вказано",
+    riskCountLabel: "Кількість ризиків",
+    exitReasonLabel: "Причина виходу",
+    tickerToday: "СЬОГОДНІ",
+    tickerWinRate: "WIN RATE",
+    tickerOpen: "ВІДКРИТО",
+    tickerTrades: "УГОД",
+    tickerPf: "PF",
+    tickerAvgR: "СЕР. R",
+    tradeAdded: "Угоду додано",
+    tradeUpdated: "Угоду оновлено",
+    tradeDeleted: "Угоду видалено",
+    tradeClosed: "Угоду закрито",
+    tradeDuplicated: "Угоду продубльовано",
+    failedAddTrade: "Не вдалося додати угоду",
+    failedUpdateTrade: "Не вдалося оновити угоду",
+    failedDeleteTrade: "Не вдалося видалити угоду",
+    failedCloseTrade: "Не вдалося закрити угоду",
+    failedDuplicateTrade: "Не вдалося продублювати угоду",
+    exportCsv: "CSV експортовано",
+    exportXlsx: "Excel експортовано",
+    exportPdf: "PDF експорт незабаром — використовуйте CSV/Excel",
+    pnlLabel: "P&L",
+    tagsLabel: "Теги",
+    notesLabel: "Нотатки",
+    postTradeCommentLabel: "Коментар після угоди",
+    avgWin: "Середній виграш",
+    avgLoss: "Середній програш",
+    longShort: "Long / Short",
+    avgR: "Середнє R",
+    bestTrade: "Найкраща угода",
+    worstTrade: "Найгірша угода",
+    winStreak: "Серія перемог",
+    lossStreak: "Серія програшів",
+    exitScreenshotLabel: "Скріншот виходу",
+    commentAfterTrade: "Коментар після угоди",
+    exitReasonPlaceholder: "TP hit, SL hit…",
+    rMultipleLabel: "R-мультиплікатор",
+    tradeDetails: "Деталі угоди",
+    edit: "Редагувати",
+    delete: "Видалити",
+    duplicate: "Дублювати",
+    closeTrade: "Закрити угоду",
+    addTrade: "Додати угоду",
+    newTrade: "Нова угода",
+    editTrade: "Редагувати угоду",
+    basicInfo: "Основна інформація",
+    ticker: "Тікер",
+    type: "Тип",
+    date: "Дата",
+    timeIn: "Час входу",
+    entry: "Вхід",
+    additional: "Додатково",
+    entryPrice: "Ціна входу",
+    stopLoss: "Стоп-лосс",
+    takeProfit: "Тейк-профіт",
+    riskDollar: "Ризик ($)",
+    positionNotional: "Позиційний нотіонал",
+    positionSize: "Розмір позиції",
+    positionSizing: "Розмір позиції",
+    risk: "Ризик",
+    riskPerShare: "Ризик на акцію",
+    share: "акція",
+    shares: "акцій",
+    enterEntryStopRisk: "Введіть вхід, стоп і розмір ризику для розрахунку позиції.",
+    addNewSetup: "Додати нову стратегію…",
+    tags: "Теги",
+    addNewTag: "Додати новий тег…",
+    notes: "Нотатки",
+    tradeThesisContextPlan: "Теза, контекст, план…",
+    entryScreenshot: "Скріншот входу",
+    attachScreenshot: "Прикріпити скріншот",
+    replaceImage: "Замінити зображення",
+    saveTrade: "Зберегти угоду",
+    saveChanges: "Зберегти зміни",
+    saveLabel: "Зберегти",
+    cancelLabel: "Скасувати",
+    editLabel: "Редагувати",
+    deleteLabel: "Видалити",
+    addLabel: "Додати",
+    buy: "Купити",
+    sell: "Продати",
+    language: "Мова",
+    english: "English",
+    ukrainian: "Українська",
+    russian: "Русский",
+    apply: "Застосувати",
+    clearAll: "Очистити все",
+    status: "Статус",
+    direction: "Напрямок",
+    result: "Результат",
+    setup: "Стратегія",
+    tag: "Тег",
+    long: "Long",
+    short: "Short",
+    profitable: "Прибуткові",
+    losing: "Збиткові",
+    openShort: "Відкрито",
+    closedShort: "Закрито",
+    all: "Усі",
+    riskCountByDay: "Кількість ризиків по днях",
+    cumulativePnlByDay: "Накопичувальний P&L по днях",
+    equityCurve: "Крива капіталу",
+    pnlByDay: "P&L по днях",
+    statisticsTitle: "Статистика",
+    watchlistTitle: "Список спостереження",
+  },
+  en: {
+    journal: "Journal",
+    dashboard: "Dashboard",
+    statistics: "Statistics",
+    watchlist: "Watchlist",
+    todayPnL: "Today P&L",
+    winRate: "Win rate",
+    profitFactor: "Profit factor",
+    openTrades: "Open trades",
+    totalIncome: "Total income",
+    recentTrades: "Recent trades",
+    viewAll: "View all",
+    noTrades: "No trades match.",
+    searchPlaceholder: "Search ticker, notes, tags…",
+    filters: "Filters",
+    allTime: "All time",
+    last7Days: "Last 7 days",
+    last30Days: "Last 30 days",
+    last90Days: "Last 90 days",
+    thisMonth: "This month",
+    closedTrades: "closed trades",
+    closed: "Closed",
+    open: "Open",
+    allTrades: "All trades",
+    export: "Export",
+    newestFirst: "Newest first",
+    oldestFirst: "Oldest first",
+    loading: "Loading journal…",
+    loadingStats: "Loading stats…",
+    saving: "Saving...",
+    savingTrade: "Saving trade...",
+    dashboardSubtitle: "Your trading desk at a glance",
+    watchlistIntro: "Track your favorite tickers in one place.",
+    watchlistAddTickerPlaceholder: "Add ticker (AAPL)",
+    watchlistCommentPlaceholder: "Ticker comment",
+    watchlistEmpty: "No tickers yet.",
+    watchlistRemove: "Remove",
+    watchlistAddButton: "Add ticker",
+    inLabel: "In",
+    exitLabel: "Exit",
+    entryDateLabel: "Entry date",
+    exitDateLabel: "Exit date",
+    entryPriceLabel: "Entry price",
+    exitPriceLabel: "Exit price",
+    stopLossLabel: "Stop loss",
+    takeProfitLabel: "Take profit",
+    positionSizeLabel: "Position size",
+    riskDollarLabel: "Risk $",
+    riskPercentLabel: "Risk %",
+    defaultRiskLabel: "Default risk per trade ($)",
+    defaultRiskHint: "Used for stats and new trades when risk is not provided",
+    riskCountLabel: "Risk count",
+    exitReasonLabel: "Exit reason",
+    tickerToday: "TODAY",
+    tickerWinRate: "WIN RATE",
+    tickerOpen: "OPEN",
+    tickerTrades: "TRADES",
+    tickerPf: "PF",
+    tickerAvgR: "AVG R",
+    tradeAdded: "Trade added",
+    tradeUpdated: "Trade updated",
+    tradeDeleted: "Trade deleted",
+    tradeClosed: "Trade closed",
+    tradeDuplicated: "Trade duplicated",
+    failedAddTrade: "Failed to add trade",
+    failedUpdateTrade: "Failed to update trade",
+    failedDeleteTrade: "Failed to delete trade",
+    failedCloseTrade: "Failed to close trade",
+    failedDuplicateTrade: "Failed to duplicate trade",
+    exportCsv: "CSV exported",
+    exportXlsx: "Excel exported",
+    exportPdf: "PDF export coming soon — use CSV/Excel for now",
+    pnlLabel: "P&L",
+    tagsLabel: "Tags",
+    notesLabel: "Notes",
+    postTradeCommentLabel: "Post-trade comment",
+    avgWin: "Avg win",
+    avgLoss: "Avg loss",
+    longShort: "Long / Short",
+    avgR: "Avg R",
+    bestTrade: "Best trade",
+    worstTrade: "Worst trade",
+    winStreak: "Win streak",
+    lossStreak: "Loss streak",
+    exitScreenshotLabel: "Exit screenshot",
+    commentAfterTrade: "Comment after trade",
+    exitReasonPlaceholder: "TP hit, SL hit…",
+    rMultipleLabel: "R-multiple",
+    tradeDetails: "Trade details",
+    edit: "Edit",
+    delete: "Delete",
+    duplicate: "Duplicate",
+    closeTrade: "Close trade",
+    addTrade: "Add trade",
+    newTrade: "New trade",
+    editTrade: "Edit trade",
+    basicInfo: "Basic info",
+    ticker: "Ticker",
+    type: "Type",
+    date: "Date",
+    timeIn: "Time in",
+    entry: "Entry",
+    additional: "Additional",
+    entryPrice: "Entry price",
+    stopLoss: "Stop loss",
+    takeProfit: "Take profit",
+    riskDollar: "Risk ($)",
+    positionNotional: "Position notional",
+    positionSize: "Position size",
+    positionSizing: "Position sizing",
+    risk: "Risk",
+    riskPerShare: "Risk per share",
+    share: "share",
+    shares: "shares",
+    enterEntryStopRisk: "Enter entry, stop, and risk amount to calculate size.",
+    addNewSetup: "Add new setup…",
+    tags: "Tags",
+    addNewTag: "Add new tag…",
+    notes: "Notes",
+    tradeThesisContextPlan: "Trade thesis, context, plan…",
+    entryScreenshot: "Entry screenshot",
+    attachScreenshot: "Attach screenshot",
+    replaceImage: "Replace image",
+    saveTrade: "Save trade",
+    saveChanges: "Save changes",
+    saveLabel: "Save",
+    cancelLabel: "Cancel",
+    editLabel: "Edit",
+    deleteLabel: "Delete",
+    addLabel: "Add",
+    buy: "Buy",
+    sell: "Sell",
+    language: "Language",
+    english: "English",
+    ukrainian: "Ukrainian",
+    russian: "Russian",
+    apply: "Apply",
+    clearAll: "Clear all",
+    status: "Status",
+    direction: "Direction",
+    result: "Result",
+    setup: "Setup",
+    tag: "Tag",
+    long: "Long",
+    short: "Short",
+    profitable: "Profitable",
+    losing: "Losing",
+    openShort: "Open",
+    closedShort: "Closed",
+    all: "All",
+    riskCountByDay: "Risk count by day",
+    riskCountLabel: "Risk count",
+    cumulativePnlByDay: "Cumulative P&L by day",
+    equityCurve: "Equity curve",
+    pnlByDay: "P&L by day",
+    statisticsTitle: "Statistics",
+    watchlistTitle: "Watchlist",
+  },
+};
 
 const STYLE = `
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
@@ -82,6 +554,10 @@ const STYLE = `
 @keyframes tj-scroll {
   0% { transform: translateX(0); }
   100% { transform: translateX(-50%); }
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .tj-card {
@@ -291,13 +767,8 @@ function normalizeWatchlist(items) {
 }
 
 export default function TradingJournalApp() {
-  const [trades, setTrades] = useState([]);
-  const [tags, setTags] = useState(DEFAULT_TAGS);
-  const [setups, setSetups] = useState(DEFAULT_SETUPS);
-  const [watchlist, setWatchlist] = useState([]);
   const [watchlistInput, setWatchlistInput] = useState("");
   const [watchlistComment, setWatchlistComment] = useState("");
-  const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState("dashboard");
   const [toast, setToast] = useState(null);
   const [newOpen, setNewOpen] = useState(false);
@@ -307,6 +778,58 @@ export default function TradingJournalApp() {
   const [search, setSearch] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
   const [filters, setFilters] = useState({ status: "all", side: "all", result: "all", setup: "all", tag: "all" });
+  const [incomePeriod, setIncomePeriod] = useState("30d");
+  const [defaultRiskPerTrade, setDefaultRiskPerTrade] = useState(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      return window.localStorage.getItem("tj-default-risk") || "";
+    } catch {
+      return "";
+    }
+  });
+  const [isSavingTrade, setIsSavingTrade] = useState(false);
+  const saveInFlightRef = useRef(false);
+  const [language, setLanguage] = useState(() => {
+    if (typeof window === "undefined") return "en";
+    return window.localStorage.getItem("tj-language") || "en";
+  });
+
+  const [trades, setTrades] = useState(() => {
+    if (typeof window === "undefined") return seedTrades();
+    try {
+      const raw = window.localStorage.getItem("tj-trades");
+      return raw ? JSON.parse(raw) : seedTrades();
+    } catch {
+      return seedTrades();
+    }
+  });
+  const [tags, setTags] = useState(() => {
+    if (typeof window === "undefined") return DEFAULT_TAGS;
+    try {
+      const raw = window.localStorage.getItem("tj-tags");
+      return raw ? JSON.parse(raw) : DEFAULT_TAGS;
+    } catch {
+      return DEFAULT_TAGS;
+    }
+  });
+  const [setups, setSetups] = useState(() => {
+    if (typeof window === "undefined") return DEFAULT_SETUPS;
+    try {
+      const raw = window.localStorage.getItem("tj-setups");
+      return raw ? JSON.parse(raw) : DEFAULT_SETUPS;
+    } catch {
+      return DEFAULT_SETUPS;
+    }
+  });
+  const [watchlist, setWatchlist] = useState(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = window.localStorage.getItem("tj-watchlist");
+      return normalizeWatchlist(raw ? JSON.parse(raw) : []);
+    } catch {
+      return [];
+    }
+  });
 
   useEffect(() => {
     (async () => {
@@ -314,6 +837,7 @@ export default function TradingJournalApp() {
         const params = new URLSearchParams(window.location.search);
         const telegramApp = typeof window !== "undefined" ? window.Telegram?.WebApp : null;
         const initData = telegramApp?.initData || params.get("tgWebAppData") || params.get("initData") || "";
+        const hasStoredToken = Boolean(typeof window !== "undefined" ? window.localStorage.getItem("tj_token") : "");
 
         if (initData) {
           await loginWithTelegram(initData);
@@ -324,50 +848,71 @@ export default function TradingJournalApp() {
           telegramApp.expand();
         }
 
-        const remoteTrades = await fetchTrades();
-        const items = remoteTrades?.items || remoteTrades || [];
-        if (Array.isArray(items) && items.length) {
-          setTrades(items);
+        if (initData || hasStoredToken) {
+          const remoteTrades = await fetchTrades();
+          const items = remoteTrades?.items || remoteTrades || [];
+          if (Array.isArray(items) && items.length) {
+            setTrades(items);
+          } else {
+            throw new Error("No remote trades");
+          }
         } else {
-          const t = await STORAGE.get("tj-trades");
-          const g = await STORAGE.get("tj-tags");
-          const s = await STORAGE.get("tj-setups");
-          const w = await STORAGE.get("tj-watchlist");
-          setTrades(t ? JSON.parse(t.value) : seedTrades());
-          setTags(g ? JSON.parse(g.value) : DEFAULT_TAGS);
-          setSetups(s ? JSON.parse(s.value) : DEFAULT_SETUPS);
-          setWatchlist(normalizeWatchlist(w ? JSON.parse(w.value) : []));
+          throw new Error("Offline mode");
         }
       } catch (e) {
-        const t = await STORAGE.get("tj-trades");
-        const g = await STORAGE.get("tj-tags");
-        const s = await STORAGE.get("tj-setups");
-        const w = await STORAGE.get("tj-watchlist");
-        setTrades(t ? JSON.parse(t.value) : seedTrades());
-        setTags(g ? JSON.parse(g.value) : DEFAULT_TAGS);
-        setSetups(s ? JSON.parse(s.value) : DEFAULT_SETUPS);
-        setWatchlist(normalizeWatchlist(w ? JSON.parse(w.value) : []));
+        const storedTrades = typeof window !== "undefined" ? window.localStorage.getItem("tj-trades") : null;
+        const storedTags = typeof window !== "undefined" ? window.localStorage.getItem("tj-tags") : null;
+        const storedSetups = typeof window !== "undefined" ? window.localStorage.getItem("tj-setups") : null;
+        const storedWatchlist = typeof window !== "undefined" ? window.localStorage.getItem("tj-watchlist") : null;
+
+        if (storedTrades) {
+          try { setTrades(JSON.parse(storedTrades)); } catch { setTrades(seedTrades()); }
+        } else {
+          setTrades(seedTrades());
+        }
+        if (storedTags) {
+          try { setTags(JSON.parse(storedTags)); } catch { setTags(DEFAULT_TAGS); }
+        } else {
+          setTags(DEFAULT_TAGS);
+        }
+        if (storedSetups) {
+          try { setSetups(JSON.parse(storedSetups)); } catch { setSetups(DEFAULT_SETUPS); }
+        } else {
+          setSetups(DEFAULT_SETUPS);
+        }
+        if (storedWatchlist) {
+          try { setWatchlist(normalizeWatchlist(JSON.parse(storedWatchlist))); } catch { setWatchlist([]); }
+        } else {
+          setWatchlist([]);
+        }
       }
-      setLoaded(true);
     })();
   }, []);
 
   useEffect(() => {
-    if (!loaded) return;
     STORAGE.set("tj-trades", JSON.stringify(trades)).catch(() => {});
-  }, [trades, loaded]);
+  }, [trades]);
   useEffect(() => {
-    if (!loaded) return;
     STORAGE.set("tj-tags", JSON.stringify(tags)).catch(() => {});
-  }, [tags, loaded]);
+  }, [tags]);
   useEffect(() => {
-    if (!loaded) return;
     STORAGE.set("tj-setups", JSON.stringify(setups)).catch(() => {});
-  }, [setups, loaded]);
+  }, [setups]);
   useEffect(() => {
-    if (!loaded) return;
     STORAGE.set("tj-watchlist", JSON.stringify(watchlist)).catch(() => {});
-  }, [watchlist, loaded]);
+  }, [watchlist]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("tj-language", language);
+    }
+  }, [language]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("tj-default-risk", defaultRiskPerTrade);
+    }
+  }, [defaultRiskPerTrade]);
 
   function showToast(msg) {
     setToast(msg);
@@ -401,6 +946,26 @@ export default function TradingJournalApp() {
   }
 
   async function addTrade(t) {
+    if (saveInFlightRef.current) return;
+    saveInFlightRef.current = true;
+    setIsSavingTrade(true);
+
+    const riskDollar = resolveRiskValue(t.riskDollar) ?? resolveRiskValue(defaultRiskPerTrade);
+    const optimisticTrade = {
+      ...t,
+      id: uid(),
+      status: "open",
+      createdAt: Date.now(),
+      pnl: null,
+      pnlPercent: null,
+      rMultiple: null,
+      tags: t.tags || [],
+    };
+
+    setTrades((prev) => [optimisticTrade, ...prev]);
+    setNewOpen(false);
+    showToast(t.savingTrade);
+
     try {
       const created = await createTrade({
         ticker: t.ticker,
@@ -417,23 +982,34 @@ export default function TradingJournalApp() {
         notes: t.notes,
         tags: t.tags || [],
       });
-      setTrades((prev) => [created, ...prev]);
-      setNewOpen(false);
-      showToast("Trade added");
+
+      if (created && typeof created === "object" && created.id) {
+        setTrades((prev) => prev.map((trade) => trade.id === optimisticTrade.id ? { ...optimisticTrade, ...created } : trade));
+      }
+        showToast(t.tradeAdded);
     } catch (err) {
-      setTrades((prev) => [{ ...t, id: uid(), status: "open", createdAt: Date.now(), pnl: null, pnlPercent: null, rMultiple: null }, ...prev]);
-      setNewOpen(false);
-      showToast(err.message || "Failed to add trade");
+      showToast(err.message || t.failedAddTrade);
+    } finally {
+      saveInFlightRef.current = false;
+      setIsSavingTrade(false);
     }
   }
   async function updateTradeById(id, patch) {
+    const normalizedPatch = {
+      ...patch,
+      riskDollar: resolveRiskValue(patch.riskDollar) ?? resolveRiskValue(defaultRiskPerTrade) ?? patch.riskDollar,
+    };
     try {
-      const updated = await updateTrade(id, patch);
-      setTrades((prev) => prev.map((trade) => (trade.id === id ? updated : trade)));
-      showToast("Trade updated");
+      const updated = await updateTrade(id, normalizedPatch);
+      if (updated && typeof updated === "object" && updated.id) {
+        setTrades((prev) => prev.map((trade) => (trade.id === id ? updated : trade)));
+      } else {
+        setTrades((prev) => prev.map((trade) => (trade.id === id ? { ...trade, ...normalizedPatch } : trade)));
+      }
+      showToast(t.tradeUpdated);
     } catch (err) {
-      setTrades((prev) => prev.map((trade) => (trade.id === id ? { ...trade, ...patch } : trade)));
-      showToast(err.message || "Failed to update trade");
+      setTrades((prev) => prev.map((trade) => (trade.id === id ? { ...trade, ...normalizedPatch } : trade)));
+      showToast(err.message || t.failedUpdateTrade);
     }
   }
   async function deleteTradeById(id) {
@@ -441,22 +1017,27 @@ export default function TradingJournalApp() {
       await deleteTrade(id);
       setTrades((prev) => prev.filter((trade) => trade.id !== id));
       setDetailId(null);
-      showToast("Trade deleted");
+      showToast(t.tradeDeleted);
     } catch (err) {
       setTrades((prev) => prev.filter((trade) => trade.id !== id));
       setDetailId(null);
-      showToast(err.message || "Failed to delete trade");
+      showToast(err.message || t.failedDeleteTrade);
     }
   }
   async function duplicateTradeById(trade) {
     try {
       const created = await duplicateTrade(trade.id);
-      setTrades((prev) => [created, ...prev]);
-      showToast("Trade duplicated");
+      if (created && typeof created === "object" && created.id) {
+        setTrades((prev) => [created, ...prev]);
+      } else {
+        const copy = { ...trade, id: uid(), status: "open", createdAt: Date.now(), exitPrice: null, exitDate: null, exitTime: null, exitReason: null, pnl: null, pnlPercent: null, rMultiple: null, postComment: "" };
+        setTrades((prev) => [copy, ...prev]);
+      }
+      showToast(t.tradeDuplicated);
     } catch (err) {
       const copy = { ...trade, id: uid(), status: "open", createdAt: Date.now(), exitPrice: null, exitDate: null, exitTime: null, exitReason: null, pnl: null, pnlPercent: null, rMultiple: null, postComment: "" };
       setTrades((prev) => [copy, ...prev]);
-      showToast(err.message || "Failed to duplicate trade");
+      showToast(err.message || t.failedDuplicateTrade);
     }
   }
   async function closeTradeById(id, data) {
@@ -471,10 +1052,14 @@ export default function TradingJournalApp() {
         rMultiple: data.rMultiple !== "" && data.rMultiple != null ? Number(data.rMultiple) : (r != null ? +r.toFixed(2) : null),
       };
       const updated = await closeTrade(id, payload);
-      setTrades((prev) => prev.map((item) => (item.id === id ? updated : item)));
+      if (updated && typeof updated === "object" && updated.id) {
+        setTrades((prev) => prev.map((item) => (item.id === id ? updated : item)));
+      } else {
+        setTrades((prev) => prev.map((item) => (item.id === id ? { ...item, ...payload, status: "closed" } : item)));
+      }
       setCloseId(null);
       setDetailId(null);
-      showToast("Trade closed");
+      showToast(t.tradeClosed);
     } catch (err) {
       const trade = trades.find((item) => item.id === id);
       const merged = { ...trade, ...data };
@@ -488,7 +1073,7 @@ export default function TradingJournalApp() {
       });
       setCloseId(null);
       setDetailId(null);
-      showToast(err.message || "Failed to close trade");
+      showToast(err.message || t.failedCloseTrade);
     }
   }
 
@@ -510,24 +1095,29 @@ export default function TradingJournalApp() {
     return out;
   }, [trades, search, filters]);
 
-  const stats = useMemo(() => computeStats(trades), [trades]);
+  const stats = useMemo(() => computeStats(filtered, defaultRiskPerTrade), [filtered, defaultRiskPerTrade]);
+  const periodPnlStats = useMemo(() => computePeriodPnl(filtered, incomePeriod, defaultRiskPerTrade), [filtered, incomePeriod, defaultRiskPerTrade]);
   const detailTrade = trades.find((trade) => trade.id === detailId) || null;
   const closingTrade = trades.find((trade) => trade.id === closeId) || null;
 
-  if (!loaded) {
-    return (
-      <div className="tj-root" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <style>{STYLE}</style>
-        <div className="tj-mono" style={{ color: "var(--text-dim)", fontSize: 13 }}>loading journal…</div>
-      </div>
-    );
-  }
+  const t = LANGUAGE_LABELS[language] || LANGUAGE_LABELS.en;
 
   return (
     <div className="tj-root">
       <style>{STYLE}</style>
       <div className="tj-phone tj-scroll-hide">
         <TickerTape stats={stats} />
+
+        <div style={{ padding: "10px 16px 0" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <div className="tj-mono" style={{ fontSize: 12, color: "var(--text-dim)" }}>{t.language}: {language === "uk" ? t.ukrainian : t.english}</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <button className={cls("tj-chip", language === "en" && "on")} onClick={() => setLanguage("en")}>EN</button>
+              <button className={cls("tj-chip", language === "uk" && "on")} onClick={() => setLanguage("uk")}>UA</button>
+              <button className={cls("tj-chip", language === "ru" && "on")} onClick={() => setLanguage("ru")}>RU</button>
+            </div>
+          </div>
+        </div>
 
         {tab === "dashboard" && (
           <Dashboard
@@ -540,6 +1130,14 @@ export default function TradingJournalApp() {
             filtersActive={Object.values(filters).some((value) => value !== "all")}
             filtered={filtered}
             goJournal={() => setTab("journal")}
+            incomePeriod={incomePeriod}
+            setIncomePeriod={setIncomePeriod}
+            periodPnlStats={periodPnlStats}
+            t={t}
+            defaultRiskPerTrade={defaultRiskPerTrade}
+            setDefaultRiskPerTrade={setDefaultRiskPerTrade}
+            language={language}
+            setLanguage={setLanguage}
           />
         )}
         {tab === "journal" && (
@@ -550,31 +1148,34 @@ export default function TradingJournalApp() {
             onOpenFilter={() => setFilterOpen(true)}
             onOpenDetail={setDetailId}
             filtersActive={Object.values(filters).some((value) => value !== "all")}
-            onExport={(type) => exportTrades(trades, type, showToast)}
+            onExport={(type) => exportTrades(trades, type, showToast, t)}
+            t={t}
+            language={language}
+            setLanguage={setLanguage}
           />
         )}
-        {tab === "stats" && <StatsScreen stats={stats} trades={trades} />}
+        {tab === "stats" && <StatsScreen stats={stats} trades={filtered} onOpenFilter={() => setFilterOpen(true)} filtersActive={Object.values(filters).some((value) => value !== "all")} t={t} language={language} setLanguage={setLanguage} />}
         {tab === "watchlist" && (
           <div style={{ padding: 18 }}>
-            <div className="tj-display" style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Watchlist</div>
-            <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 12 }}>Track your favorite tickers in one place.</div>
+            <div className="tj-display" style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{t.watchlistTitle}</div>
+            <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 12 }}>{t.watchlistIntro}</div>
             <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-              <input className="tj-input tj-input-compact" placeholder="Add ticker (AAPL)" value={watchlistInput} onChange={(event) => setWatchlistInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addTicker(); } }} />
-              <button className="tj-btn-primary" onClick={addTicker}>Add</button>
+              <input className="tj-input tj-input-compact" placeholder={t.watchlistAddTickerPlaceholder} value={watchlistInput} onChange={(event) => setWatchlistInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addTicker(); } }} />
+              <button className="tj-btn-primary" onClick={addTicker}>{t.watchlistAddButton}</button>
             </div>
             <div style={{ marginBottom: 12 }}>
-              <input className="tj-input tj-input-compact" placeholder="Ticker comment" value={watchlistComment} onChange={(event) => setWatchlistComment(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addTicker(); } }} />
+              <input className="tj-input tj-input-compact" placeholder={t.watchlistCommentPlaceholder} value={watchlistComment} onChange={(event) => setWatchlistComment(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addTicker(); } }} />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {watchlist.length === 0 ? (
-                <div className="tj-card" style={{ padding: 16, color: "var(--text-dim)", fontSize: 13 }}>No tickers yet.</div>
+                <div className="tj-card" style={{ padding: 16, color: "var(--text-dim)", fontSize: 13 }}>{t.watchlistEmpty}</div>
               ) : watchlist.map((item) => (
                 <div key={item.symbol} className="tj-card" style={{ padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div className="tj-display" style={{ fontSize: 16, fontWeight: 700 }}>{item.symbol}</div>
                     <input className="tj-input tj-input-compact" style={{ marginTop: 8 }} placeholder="Ticker comment" value={item.comment || ""} onChange={(event) => updateWatchlistComment(item.symbol, event.target.value)} />
                   </div>
-                  <button className="tj-btn-ghost" style={{ padding: "6px 10px", fontSize: 12 }} onClick={() => removeTicker(item.symbol)}>Remove</button>
+                  <button className="tj-btn-ghost" style={{ padding: "6px 10px", fontSize: 12 }} onClick={() => removeTicker(item.symbol)}>{t.watchlistRemove}</button>
                 </div>
               ))}
             </div>
@@ -586,10 +1187,10 @@ export default function TradingJournalApp() {
         </button>
 
         <nav className="tj-navbar">
-          <NavItem icon={Home} label="Dashboard" active={tab === "dashboard"} onClick={() => setTab("dashboard")} />
-          <NavItem icon={BookOpen} label="Journal" active={tab === "journal"} onClick={() => setTab("journal")} />
-          <NavItem icon={Eye} label="Watchlist" active={tab === "watchlist"} onClick={() => setTab("watchlist")} />
-          <NavItem icon={BarChart2} label="Stats" active={tab === "stats"} onClick={() => setTab("stats")} />
+          <NavItem icon={Home} label={t.dashboard} active={tab === "dashboard"} onClick={() => setTab("dashboard")} />
+          <NavItem icon={BookOpen} label={t.journal} active={tab === "journal"} onClick={() => setTab("journal")} />
+          <NavItem icon={Eye} label={t.watchlist} active={tab === "watchlist"} onClick={() => setTab("watchlist")} />
+          <NavItem icon={BarChart2} label={t.statistics} active={tab === "stats"} onClick={() => setTab("stats")} />
         </nav>
       </div>
 
@@ -602,6 +1203,9 @@ export default function TradingJournalApp() {
           setTags={setTags}
           onClose={() => setNewOpen(false)}
           onSubmit={addTrade}
+          t={t}
+          isSubmitting={isSavingTrade}
+          defaultRiskPerTrade={defaultRiskPerTrade}
         />
       )}
 
@@ -618,6 +1222,7 @@ export default function TradingJournalApp() {
             updateTradeById(editTrade.id, data);
             setEditTrade(null);
           }}
+          t={t}
         />
       )}
 
@@ -625,6 +1230,7 @@ export default function TradingJournalApp() {
         <TradeDetail
           trade={detailTrade}
           onClose={() => setDetailId(null)}
+          t={t}
           onEdit={() => {
             setEditTrade(detailTrade);
             setDetailId(null);
@@ -646,6 +1252,7 @@ export default function TradingJournalApp() {
           trade={closingTrade}
           onClose={() => setCloseId(null)}
           onSubmit={(data) => closeTradeById(closingTrade.id, data)}
+          t={t}
         />
       )}
 
@@ -656,6 +1263,7 @@ export default function TradingJournalApp() {
           setups={setups}
           tags={tags}
           onClose={() => setFilterOpen(false)}
+          t={t}
         />
       )}
 
@@ -672,20 +1280,100 @@ function getTodayKey(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
-function computeStats(trades) {
+function resolveRiskValue(value) {
+  if (value === "" || value == null) return undefined;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined;
+}
+
+function computePeriodPnl(trades, period, defaultRiskPerTrade) {
+  const closed = trades.filter((trade) => trade.status === "closed" && trade.pnl != null && trade.exitDate);
+  const now = new Date();
+  let startDate = null;
+
+  if (period === "7d") {
+    startDate = new Date(now);
+    startDate.setDate(now.getDate() - 7);
+  } else if (period === "30d") {
+    startDate = new Date(now);
+    startDate.setDate(now.getDate() - 30);
+  } else if (period === "90d") {
+    startDate = new Date(now);
+    startDate.setDate(now.getDate() - 90);
+  } else if (period === "month") {
+    startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+  }
+
+  const filtered = closed.filter((trade) => {
+    if (!startDate) return true;
+    const tradeDate = new Date(`${trade.exitDate}T00:00:00`);
+    return tradeDate >= startDate && tradeDate <= now;
+  });
+
+  const adjustedPnls = filtered.map((trade) => getRiskAdjustedPnl(trade, defaultRiskPerTrade));
+  const totalIncome = adjustedPnls.reduce((sum, value) => sum + value, 0);
+  const riskCount = filtered.reduce((sum, trade) => sum + getTradeRiskCount(trade, defaultRiskPerTrade), 0);
+  const wins = adjustedPnls.filter((value) => value > 0);
+  const losses = adjustedPnls.filter((value) => value <= 0);
+  const winRate = filtered.length ? (wins.length / filtered.length) * 100 : 0;
+  const grossWin = wins.reduce((sum, value) => sum + value, 0);
+  const grossLoss = Math.abs(losses.reduce((sum, value) => sum + value, 0));
+  const profitFactor = grossLoss ? grossWin / grossLoss : grossWin > 0 ? Infinity : 0;
+
+  return {
+    totalIncome,
+    tradeCount: filtered.length,
+    riskCount,
+    winRate,
+    profitFactor,
+    label: period === "7d" ? "last 7 days" : period === "30d" ? "last 30 days" : period === "90d" ? "last 90 days" : period === "month" ? "this month" : "all time",
+  };
+}
+
+function getTradeRiskCount(trade, defaultRiskPerTrade) {
+  const defaultRisk = resolveRiskValue(defaultRiskPerTrade);
+  const explicitRisk = resolveTradeRisk(trade, defaultRiskPerTrade);
+
+  if (defaultRisk) {
+    const tradeRisk = trade.riskDollar != null && trade.riskDollar !== "" ? Number(trade.riskDollar) : defaultRisk;
+    return defaultRisk > 0 ? tradeRisk / defaultRisk : 0;
+  }
+
+  if (!explicitRisk || explicitRisk <= 0) return 0;
+  return trade.riskDollar != null && trade.riskDollar !== "" ? Number(trade.riskDollar) / explicitRisk : 0;
+}
+
+function resolveTradeRisk(trade, defaultRiskPerTrade) {
+  const raw = trade.riskDollar != null && trade.riskDollar !== "" ? Number(trade.riskDollar) : null;
+  return Number.isFinite(raw) && raw > 0 ? raw : null;
+}
+
+function getRiskAdjustedPnl(trade, defaultRiskPerTrade) {
+  if (trade.pnl == null || trade.pnl === "") return 0;
+  const defaultRisk = resolveRiskValue(defaultRiskPerTrade);
+  if (defaultRisk && defaultRisk > 0) {
+    return Number(trade.pnl) / defaultRisk;
+  }
+  const risk = resolveTradeRisk(trade, defaultRiskPerTrade);
+  return risk && risk > 0 ? Number(trade.pnl) / risk : Number(trade.pnl) || 0;
+}
+
+function computeStats(trades, defaultRiskPerTrade) {
   const closed = trades.filter((trade) => trade.status === "closed" && trade.pnl != null);
   const open = trades.filter((trade) => trade.status === "open");
-  const totalPnl = closed.reduce((sum, trade) => sum + trade.pnl, 0);
+  const adjustedPnls = closed.map((trade) => getRiskAdjustedPnl(trade, defaultRiskPerTrade));
+  const totalPnl = adjustedPnls.reduce((sum, value) => sum + value, 0);
+  const riskCount = closed.reduce((sum, trade) => sum + getTradeRiskCount(trade, defaultRiskPerTrade), 0);
   const todayKey = getTodayKey();
   const todayPnl = closed.reduce((sum, trade) => (trade.exitDate === todayKey ? sum + trade.pnl : sum), 0);
   const totalPnlPct = closed.reduce((sum, trade) => sum + (trade.pnlPercent || 0), 0);
-  const wins = closed.filter((trade) => trade.pnl > 0);
-  const losses = closed.filter((trade) => trade.pnl <= 0);
+  const wins = adjustedPnls.filter((value) => value > 0);
+  const losses = adjustedPnls.filter((value) => value <= 0);
   const winRate = closed.length ? (wins.length / closed.length) * 100 : 0;
-  const avgWin = wins.length ? wins.reduce((sum, trade) => sum + trade.pnl, 0) / wins.length : 0;
-  const avgLoss = losses.length ? losses.reduce((sum, trade) => sum + trade.pnl, 0) / losses.length : 0;
-  const grossWin = wins.reduce((sum, trade) => sum + trade.pnl, 0);
-  const grossLoss = Math.abs(losses.reduce((sum, trade) => sum + trade.pnl, 0));
+  const avgWin = wins.length ? wins.reduce((sum, value) => sum + value, 0) / wins.length : 0;
+  const avgLoss = losses.length ? losses.reduce((sum, value) => sum + value, 0) / losses.length : 0;
+  const grossWin = wins.reduce((sum, value) => sum + value, 0);
+  const grossLoss = Math.abs(losses.reduce((sum, value) => sum + value, 0));
   const profitFactor = grossLoss ? grossWin / grossLoss : grossWin > 0 ? Infinity : 0;
   const expectancy = closed.length ? totalPnl / closed.length : 0;
   const rTrades = closed.filter((trade) => trade.rMultiple != null);
@@ -709,22 +1397,28 @@ function computeStats(trades) {
   chrono.forEach((trade) => { byDayMap[trade.exitDate] = (byDayMap[trade.exitDate] || 0) + trade.pnl; });
   const byDay = Object.entries(byDayMap).map(([date, pnl]) => ({ date, pnl: +pnl.toFixed(2) }));
 
-  const byMonthMap = {};
+  const byDayPnlMap = {};
   chrono.forEach((trade) => {
-    const month = (trade.exitDate || "").slice(0, 7);
-    if (!byMonthMap[month]) byMonthMap[month] = { pnl: 0, wins: 0, total: 0 };
-    byMonthMap[month].pnl += trade.pnl;
-    byMonthMap[month].total += 1;
-    if (trade.pnl > 0) byMonthMap[month].wins += 1;
+    const day = trade.exitDate || "";
+    if (!byDayPnlMap[day]) byDayPnlMap[day] = { date: day, pnl: 0 };
+    byDayPnlMap[day].pnl += trade.pnl;
   });
-  const byMonth = Object.entries(byMonthMap).map(([month, value]) => ({ month, pnl: +value.pnl.toFixed(2), winRate: value.total ? +((value.wins / value.total) * 100).toFixed(1) : 0 }));
+  const byDayEquity = Object.values(byDayPnlMap)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .reduce((acc, item) => {
+      const last = acc[acc.length - 1];
+      const equity = last ? +(last.equity + item.pnl).toFixed(2) : +(item.pnl).toFixed(2);
+      acc.push({ date: item.date, equity });
+      return acc;
+    }, []);
 
   return {
     totalPnl, todayPnl, totalPnlPct, winRate, tradeCount: trades.length, closedCount: closed.length,
+    riskCount,
     openCount: open.length, longCount: trades.filter((trade) => trade.side === "long").length,
     shortCount: trades.filter((trade) => trade.side === "short").length,
     avgWin, avgLoss, profitFactor, expectancy, avgR, best, worst, maxWinStreak, maxLossStreak,
-    equityCurve, byDay, byMonth,
+    equityCurve, byDay, byDayEquity,
   };
 }
 
@@ -761,12 +1455,14 @@ function TickerTape({ stats }) {
   );
 }
 
-function SearchBar({ search, setSearch, onOpenFilter, filtersActive }) {
+function SearchBar({ search, setSearch, onOpenFilter, filtersActive, t }) {
+  const searchPlaceholder = t?.searchPlaceholder || "Search trades";
+
   return (
     <div style={{ display: "flex", gap: 8, padding: "12px 16px" }}>
       <div style={{ flex: 1, position: "relative" }}>
         <Search size={15} style={{ position: "absolute", left: 12, top: 12, color: "var(--text-faint)" }} />
-        <input className="tj-input" style={{ paddingLeft: 34 }} placeholder="Search ticker, notes, tags…" value={search} onChange={(event) => setSearch(event.target.value)} />
+        <input className="tj-input" style={{ paddingLeft: 34 }} placeholder={searchPlaceholder} value={search} onChange={(event) => setSearch(event.target.value)} />
       </div>
       <button className="tj-btn-ghost" style={{ padding: "0 14px", position: "relative" }} onClick={onOpenFilter}>
         <SlidersHorizontal size={16} />
@@ -805,7 +1501,7 @@ function StatusBadge({ status }) {
   );
 }
 
-function TradeRow({ trade, onClick }) {
+function TradeRow({ trade, onClick, t }) {
   const entryStamp = trade.entryDate ? `${trade.entryDate}${trade.entryTime ? ` ${trade.entryTime}` : ""}` : "—";
   const exitStamp = trade.status === "closed" && trade.exitDate ? `${trade.exitDate}${trade.exitTime ? ` ${trade.exitTime}` : ""}` : null;
 
@@ -818,8 +1514,8 @@ function TradeRow({ trade, onClick }) {
           <StatusBadge status={trade.status} />
         </div>
         <div style={{ fontSize: 11.5, color: "var(--text-faint)", display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <span>In {entryStamp}</span>
-          {exitStamp && <span>Exit {exitStamp}</span>}
+          <span>{t.inLabel} {entryStamp}</span>
+          {exitStamp && <span>{t.exitLabel} {exitStamp}</span>}
           {trade.setup && <span>· {trade.setup}</span>}
         </div>
       </div>
@@ -832,43 +1528,85 @@ function TradeRow({ trade, onClick }) {
   );
 }
 
-function Dashboard({ stats, search, setSearch, onOpenFilter, onOpenDetail, filtersActive, filtered, goJournal }) {
+function Dashboard({ stats, search, setSearch, onOpenFilter, onOpenDetail, filtersActive, filtered, goJournal, incomePeriod, setIncomePeriod, periodPnlStats, t, defaultRiskPerTrade, setDefaultRiskPerTrade }) {
   const recent = filtered.slice(0, 6);
   return (
     <div style={{ paddingBottom: 100 }}>
       <div style={{ padding: "18px 16px 4px" }}>
-        <div className="tj-display" style={{ fontSize: 22, fontWeight: 700 }}>Journal</div>
-        <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>Your trading desk at a glance</div>
+        <div className="tj-display" style={{ fontSize: 22, fontWeight: 700 }}>{t.journal}</div>
+        <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{t.dashboardSubtitle}</div>
       </div>
 
       <div style={{ padding: "14px 16px 4px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <div className="tj-card" style={{ padding: 14 }}>
-          <div className="tj-label" style={{ marginBottom: 8 }}>Today P&L</div>
+          <div className="tj-label" style={{ marginBottom: 8 }}>{t.todayPnL}</div>
           <PnlText value={stats.todayPnl} size={20} />
         </div>
         <div className="tj-card" style={{ padding: 14 }}>
-          <div className="tj-label" style={{ marginBottom: 8 }}>Win Rate</div>
-          <div className="tj-mono" style={{ fontSize: 20, fontWeight: 600 }}>{fmt2(stats.winRate)}%</div>
+          <div className="tj-label" style={{ marginBottom: 8 }}>{t.winRate}</div>
+          <div className="tj-mono" style={{ fontSize: 20, fontWeight: 600 }}>{fmt2(periodPnlStats.winRate)}%</div>
         </div>
         <div className="tj-card" style={{ padding: 14 }}>
-          <div className="tj-label" style={{ marginBottom: 8 }}>Profit Factor</div>
-          <div className="tj-mono" style={{ fontSize: 20, fontWeight: 600 }}>{stats.profitFactor === Infinity ? "∞" : fmt2(stats.profitFactor)}</div>
+          <div className="tj-label" style={{ marginBottom: 8 }}>{t.profitFactor}</div>
+          <div className="tj-mono" style={{ fontSize: 20, fontWeight: 600 }}>{periodPnlStats.profitFactor === Infinity ? "∞" : fmt2(periodPnlStats.profitFactor)}</div>
         </div>
         <div className="tj-card" style={{ padding: 14 }}>
-          <div className="tj-label" style={{ marginBottom: 8 }}>Open Trades</div>
+          <div className="tj-label" style={{ marginBottom: 8 }}>{t.openTrades}</div>
           <div className="tj-mono" style={{ fontSize: 20, fontWeight: 600, color: "var(--accent)" }}>{stats.openCount}</div>
         </div>
       </div>
 
-      <SearchBar search={search} setSearch={setSearch} onOpenFilter={onOpenFilter} filtersActive={filtersActive} />
+      <div style={{ padding: "8px 16px 0" }}>
+        <div className="tj-card" style={{ padding: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <div className="tj-label" style={{ marginBottom: 0 }}>{t.totalIncome}</div>
+            <select
+              className="tj-input tj-input-compact"
+              style={{ width: "auto", minWidth: 120, padding: "7px 10px" }}
+              value={incomePeriod}
+              onChange={(event) => setIncomePeriod(event.target.value)}
+            >
+              <option value="all">{t.allTime}</option>
+              <option value="7d">{t.last7Days}</option>
+              <option value="30d">{t.last30Days}</option>
+              <option value="90d">{t.last90Days}</option>
+              <option value="month">{t.thisMonth}</option>
+            </select>
+          </div>
+          <div className="tj-mono" style={{ fontSize: 22, fontWeight: 700, color: periodPnlStats.totalIncome >= 0 ? "var(--profit)" : "var(--loss)" }}>
+            {periodPnlStats.totalIncome >= 0 ? "+" : ""}{fmt2(periodPnlStats.totalIncome)} R
+          </div>
+          <div style={{ marginTop: 6, fontSize: 12, color: "var(--text-dim)" }}>
+            {periodPnlStats.tradeCount} {t.closedTrades} · {periodPnlStats.label}
+          </div>
+          <div style={{ marginTop: 8, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, fontSize: 12, color: "var(--text-dim)" }}>
+            <span>{t.defaultRiskHint}</span>
+            <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span>{t.defaultRiskLabel}</span>
+              <input
+                className="tj-input tj-input-compact"
+                style={{ width: 84, minHeight: 30, padding: "6px 8px", fontSize: 12 }}
+                type="text"
+                inputMode="decimal"
+                pattern="[0-9.]*"
+                value={defaultRiskPerTrade ?? ""}
+                onChange={(event) => setDefaultRiskPerTrade(event.target.value)}
+                placeholder="0"
+              />
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <SearchBar search={search} setSearch={setSearch} onOpenFilter={onOpenFilter} filtersActive={filtersActive} t={t} />
 
       <div style={{ padding: "0 16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)" }}>Recent trades</div>
-          <button onClick={goJournal} style={{ fontSize: 12, color: "var(--accent)" }}>View all</button>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)" }}>{t.recentTrades}</div>
+          <button onClick={goJournal} style={{ fontSize: 12, color: "var(--accent)" }}>{t.viewAll}</button>
         </div>
-        {recent.length === 0 && <EmptyState text="No trades match. Try clearing filters or add your first trade." />}
-        {recent.map((trade) => <TradeRow key={trade.id} trade={trade} onClick={() => onOpenDetail(trade.id)} />)}
+        {recent.length === 0 && <EmptyState text={t.noTrades} />}
+        {recent.map((trade) => <TradeRow key={trade.id} trade={trade} onClick={() => onOpenDetail(trade.id)} t={t} />)}
       </div>
     </div>
   );
@@ -882,7 +1620,7 @@ function EmptyState({ text }) {
   );
 }
 
-function Journal({ trades, search, setSearch, onOpenFilter, onOpenDetail, filtersActive, onExport }) {
+function Journal({ trades, search, setSearch, onOpenFilter, onOpenDetail, filtersActive, onExport, t }) {
   const [exportOpen, setExportOpen] = useState(false);
   const [sortNewest, setSortNewest] = useState(true);
 
@@ -897,13 +1635,13 @@ function Journal({ trades, search, setSearch, onOpenFilter, onOpenDetail, filter
   return (
     <div style={{ paddingBottom: 100 }}>
       <div style={{ padding: "18px 16px 0", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-        <div className="tj-display" style={{ fontSize: 20, fontWeight: 700 }}>All trades</div>
+        <div className="tj-display" style={{ fontSize: 20, fontWeight: 700 }}>{t.allTrades}</div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <button className="tj-btn-ghost" style={{ padding: "8px 10px", fontSize: 12.5 }} onClick={() => setSortNewest((value) => !value)}>
-            {sortNewest ? "Newest first" : "Oldest first"}
+            {sortNewest ? t.newestFirst : t.oldestFirst}
           </button>
           <button className="tj-btn-ghost" style={{ padding: "8px 12px", display: "flex", alignItems: "center", gap: 6, fontSize: 12.5 }} onClick={() => setExportOpen((value) => !value)}>
-            <Download size={14} /> Export
+            <Download size={14} /> {t.export}
           </button>
         </div>
       </div>
@@ -914,109 +1652,32 @@ function Journal({ trades, search, setSearch, onOpenFilter, onOpenDetail, filter
           ))}
         </div>
       )}
-      <SearchBar search={search} setSearch={setSearch} onOpenFilter={onOpenFilter} filtersActive={filtersActive} />
+      <SearchBar search={search} setSearch={setSearch} onOpenFilter={onOpenFilter} filtersActive={filtersActive} t={t} />
       <div style={{ padding: "0 16px" }}>
-        {sortedTrades.length === 0 && <EmptyState text="No trades match your search or filters." />}
-        {sortedTrades.map((trade) => <TradeRow key={trade.id} trade={trade} onClick={() => onOpenDetail(trade.id)} />)}
+        {sortedTrades.length === 0 && <EmptyState text={t.noTrades} />}
+        {sortedTrades.map((trade) => <TradeRow key={trade.id} trade={trade} onClick={() => onOpenDetail(trade.id)} t={t} />)}
       </div>
     </div>
   );
 }
 
-function StatsScreen({ stats, trades }) {
+function StatsScreen({ stats, trades, onOpenFilter, filtersActive, t }) {
   return (
     <div style={{ paddingBottom: 100 }}>
-      <div style={{ padding: "18px 16px 4px" }}>
-        <div className="tj-display" style={{ fontSize: 20, fontWeight: 700 }}>Statistics</div>
-        <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{stats.closedCount} closed · {stats.openCount} open</div>
+      <div style={{ padding: "18px 16px 4px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+        <div>
+          <div className="tj-display" style={{ fontSize: 20, fontWeight: 700 }}>{t.statisticsTitle}</div>
+          <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{stats.closedCount} {t.closed} · {stats.openCount} {t.open}</div>
+        </div>
+        <button className="tj-btn-ghost" style={{ padding: "8px 12px", position: "relative" }} onClick={onOpenFilter}>
+          <SlidersHorizontal size={16} />
+          {filtersActive && <span style={{ position: "absolute", top: -3, right: -3, width: 8, height: 8, borderRadius: 999, background: "var(--accent)" }} />}
+        </button>
       </div>
 
-      <div style={{ padding: "14px 16px 0" }}>
-        <div className="tj-card" style={{ padding: 16 }}>
-          <div className="tj-label">Equity curve</div>
-          <ResponsiveContainer width="100%" height={140}>
-            <AreaChart data={stats.equityCurve}>
-              <defs>
-                <linearGradient id="eq" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#E8A33D" stopOpacity={0.35} />
-                  <stop offset="100%" stopColor="#E8A33D" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="date" hide />
-              <YAxis hide />
-              <Tooltip contentStyle={{ background: "#1B2129", border: "1px solid #262E38", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#8A93A1" }} />
-              <Area type="monotone" dataKey="equity" stroke="#E8A33D" fill="url(#eq)" strokeWidth={2} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      <div style={{ padding: "12px 16px 0", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <StatTile label="Avg win" value={fmt2(stats.avgWin)} color="var(--profit)" />
-        <StatTile label="Avg loss" value={fmt2(stats.avgLoss)} color="var(--loss)" />
-        <StatTile label="Long / Short" value={`${stats.longCount} / ${stats.shortCount}`} />
-        <StatTile label="Avg R" value={`${fmt2(stats.avgR)}R`} />
-      </div>
-
-      <div style={{ padding: "12px 16px 0", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <div className="tj-card" style={{ padding: 14 }}>
-          <div className="tj-label" style={{ display: "flex", alignItems: "center", gap: 5 }}><Trophy size={12} /> Best trade</div>
-          {stats.best ? (
-            <>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{stats.best.ticker}</div>
-              <PnlText value={stats.best.pnl} size={16} />
-            </>
-          ) : <div style={{ color: "var(--text-faint)", fontSize: 12 }}>—</div>}
-        </div>
-        <div className="tj-card" style={{ padding: 14 }}>
-          <div className="tj-label" style={{ display: "flex", alignItems: "center", gap: 5 }}><Skull size={12} /> Worst trade</div>
-          {stats.worst ? (
-            <>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{stats.worst.ticker}</div>
-              <PnlText value={stats.worst.pnl} size={16} />
-            </>
-          ) : <div style={{ color: "var(--text-faint)", fontSize: 12 }}>—</div>}
-        </div>
-        <div className="tj-card" style={{ padding: 14 }}>
-          <div className="tj-label" style={{ display: "flex", alignItems: "center", gap: 5 }}><Flame size={12} /> Win streak</div>
-          <div className="tj-mono" style={{ fontSize: 18, fontWeight: 600, color: "var(--profit)" }}>{stats.maxWinStreak}</div>
-        </div>
-        <div className="tj-card" style={{ padding: 14 }}>
-          <div className="tj-label" style={{ display: "flex", alignItems: "center", gap: 5 }}><Flame size={12} /> Loss streak</div>
-          <div className="tj-mono" style={{ fontSize: 18, fontWeight: 600, color: "var(--loss)" }}>{stats.maxLossStreak}</div>
-        </div>
-      </div>
-
-      <div style={{ padding: "12px 16px 0" }}>
-        <div className="tj-card" style={{ padding: 16 }}>
-          <div className="tj-label">P&L by day</div>
-          <ResponsiveContainer width="100%" height={120}>
-            <BarChart data={stats.byDay}>
-              <XAxis dataKey="date" hide />
-              <YAxis hide />
-              <Tooltip contentStyle={{ background: "#1B2129", border: "1px solid #262E38", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#8A93A1" }} />
-              <Bar dataKey="pnl" radius={[3, 3, 0, 0]}>
-                {stats.byDay.map((day, index) => <Cell key={index} fill={day.pnl >= 0 ? "#3DDC97" : "#F0556B"} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      <div style={{ padding: "12px 16px 0" }}>
-        <div className="tj-card" style={{ padding: 16 }}>
-          <div className="tj-label">Win rate by month</div>
-          <ResponsiveContainer width="100%" height={120}>
-            <LineChart data={stats.byMonth}>
-              <CartesianGrid stroke="#262E38" vertical={false} />
-              <XAxis dataKey="month" tick={{ fill: "#5B6472", fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis hide domain={[0, 100]} />
-              <Tooltip contentStyle={{ background: "#1B2129", border: "1px solid #262E38", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#8A93A1" }} />
-              <Line type="monotone" dataKey="winRate" stroke="#5EC8D8" strokeWidth={2} dot={{ r: 3 }} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+      <Suspense fallback={<div className="tj-card" style={{ margin: "14px 16px 0", padding: 16, color: "var(--text-dim)" }}>{t.loadingStats}</div>}>
+        <StatsCharts stats={stats} t={t} />
+      </Suspense>
     </div>
   );
 }
@@ -1040,7 +1701,7 @@ function Field({ label, value }) {
   );
 }
 
-function TradeDetail({ trade, onClose, onEdit, onDelete, onDuplicate, onCloseTrade }) {
+function TradeDetail({ trade, onClose, onEdit, onDelete, onDuplicate, onCloseTrade, t }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [fullImg, setFullImg] = useState(null);
   return (
@@ -1055,26 +1716,26 @@ function TradeDetail({ trade, onClose, onEdit, onDelete, onDuplicate, onCloseTra
           </div>
 
           <div className="tj-card" style={{ padding: 16, marginBottom: 16, textAlign: "center" }}>
-            <div className="tj-label">P&L</div>
+            <div className="tj-label">{t.pnlLabel}</div>
             <PnlText value={trade.pnl} size={28} />
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 18 }}>
-            <Field label="Entry date" value={trade.entryDate ? `${trade.entryDate} ${trade.entryTime || ""}`.trim() : "—"} />
-            <Field label="Entry price" value={trade.entryPrice} />
-            <Field label="Exit date" value={trade.exitDate ? `${trade.exitDate} ${trade.exitTime || ""}`.trim() : "—"} />
-            <Field label="Exit price" value={trade.exitPrice} />
-            <Field label="Stop loss" value={trade.stopLoss} />
-            <Field label="Take profit" value={trade.takeProfit} />
-            <Field label="Position size" value={trade.positionSize} />
-            <Field label="Risk $" value={trade.riskDollar} />
-            <Field label="Risk %" value={trade.riskPercent} />
-            <Field label="Exit reason" value={trade.exitReason} />
+            <Field label={t.entryDateLabel} value={trade.entryDate ? `${trade.entryDate} ${trade.entryTime || ""}`.trim() : "—"} />
+            <Field label={t.entryPriceLabel} value={trade.entryPrice} />
+            <Field label={t.exitDateLabel} value={trade.exitDate ? `${trade.exitDate} ${trade.exitTime || ""}`.trim() : "—"} />
+            <Field label={t.exitPriceLabel} value={trade.exitPrice} />
+            <Field label={t.stopLossLabel} value={trade.stopLoss} />
+            <Field label={t.takeProfitLabel} value={trade.takeProfit} />
+            <Field label={t.positionSizeLabel} value={trade.positionSize} />
+            <Field label={t.riskDollarLabel} value={trade.riskDollar} />
+            <Field label={t.riskPercentLabel} value={trade.riskPercent} />
+            <Field label={t.exitReasonLabel} value={trade.exitReason} />
           </div>
 
           {trade.tags && trade.tags.length > 0 && (
             <div style={{ marginBottom: 16 }}>
-              <div className="tj-label" style={{ marginBottom: 6 }}>Tags</div>
+              <div className="tj-label" style={{ marginBottom: 6 }}>{t.tagsLabel}</div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {trade.tags.map((tag) => <span key={tag} className="tj-chip">{tag}</span>)}
               </div>
@@ -1083,13 +1744,13 @@ function TradeDetail({ trade, onClose, onEdit, onDelete, onDuplicate, onCloseTra
 
           {trade.notes && (
             <div style={{ marginBottom: 16 }}>
-              <div className="tj-label" style={{ marginBottom: 6 }}>Notes</div>
+              <div className="tj-label" style={{ marginBottom: 6 }}>{t.notesLabel}</div>
               <div style={{ fontSize: 13, lineHeight: 1.5, color: "var(--text)" }}>{trade.notes}</div>
             </div>
           )}
           {trade.postComment && (
             <div style={{ marginBottom: 16 }}>
-              <div className="tj-label" style={{ marginBottom: 6 }}>Post-trade comment</div>
+              <div className="tj-label" style={{ marginBottom: 6 }}>{t.postTradeCommentLabel}</div>
               <div style={{ fontSize: 13, lineHeight: 1.5, color: "var(--text)" }}>{trade.postComment}</div>
             </div>
           )}
@@ -1106,20 +1767,20 @@ function TradeDetail({ trade, onClose, onEdit, onDelete, onDuplicate, onCloseTra
           )}
 
           {trade.status === "open" && (
-            <button className="tj-btn-primary" style={{ width: "100%", marginBottom: 10 }} onClick={onCloseTrade}>Close trade</button>
+            <button className="tj-btn-primary" style={{ width: "100%", marginBottom: 10 }} onClick={onCloseTrade}>{t.closeTrade}</button>
           )}
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="tj-btn-ghost" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }} onClick={onEdit}><Edit2 size={14} /> Edit</button>
-            <button className="tj-btn-ghost" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }} onClick={onDuplicate}><Copy size={14} /> Duplicate</button>
-            <button className="tj-btn-ghost" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, color: "var(--loss)" }} onClick={() => setConfirmDelete(true)}><Trash2 size={14} /> Delete</button>
+            <button className="tj-btn-ghost" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }} onClick={onEdit}><Edit2 size={14} /> {t.editLabel}</button>
+            <button className="tj-btn-ghost" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }} onClick={onDuplicate}><Copy size={14} /> {t.duplicate}</button>
+            <button className="tj-btn-ghost" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, color: "var(--loss)" }} onClick={() => setConfirmDelete(true)}><Trash2 size={14} /> {t.deleteLabel}</button>
           </div>
 
           {confirmDelete && (
             <div className="tj-card" style={{ padding: 14, marginTop: 12 }}>
-              <div style={{ fontSize: 13, marginBottom: 10 }}>Delete this trade permanently?</div>
+              <div style={{ fontSize: 13, marginBottom: 10 }}>{t.deleteLabel} this trade permanently?</div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button className="tj-btn-ghost" style={{ flex: 1 }} onClick={() => setConfirmDelete(false)}>Cancel</button>
-                <button className="tj-btn-primary" style={{ flex: 1, background: "var(--loss)", color: "#fff" }} onClick={onDelete}>Delete</button>
+                <button className="tj-btn-ghost" style={{ flex: 1 }} onClick={() => setConfirmDelete(false)}>{t.cancelLabel}</button>
+                <button className="tj-btn-primary" style={{ flex: 1, background: "var(--loss)", color: "#fff" }} onClick={onDelete}>{t.deleteLabel}</button>
               </div>
             </div>
           )}
@@ -1143,13 +1804,16 @@ function SheetHeader({ title, onClose }) {
   );
 }
 
-function TradeForm({ mode, initial, setups, setSetups, tags, setTags, onClose, onSubmit }) {
-  const [form, setForm] = useState(() => initial || {
-    ticker: "", side: "long", entryDate: todayISO(), entryTime: nowTime(),
-    entryPrice: "", stopLoss: "", takeProfit: "", positionSize: "",
-    riskDollar: "", riskPercent: "", setup: "",
-    tags: [], notes: "", entryScreenshot: null,
-  });
+function TradeForm({ mode, initial, setups, setSetups, tags, setTags, onClose, onSubmit, t, isSubmitting = false, defaultRiskPerTrade = "" }) {
+  const [form, setForm] = useState(() => ({
+    ...(initial || {
+      ticker: "", side: "long", entryDate: todayISO(), entryTime: nowTime(),
+      entryPrice: "", stopLoss: "", takeProfit: "", positionSize: "",
+      riskDollar: "", riskPercent: "", setup: "",
+      tags: [], notes: "", entryScreenshot: null,
+    }),
+    riskDollar: initial?.riskDollar ?? defaultRiskPerTrade ?? "",
+  }));
   const [newSetup, setNewSetup] = useState("");
   const [newTag, setNewTag] = useState("");
   const [editingSetup, setEditingSetup] = useState(null);
@@ -1287,140 +1951,153 @@ function TradeForm({ mode, initial, setups, setSetups, tags, setTags, onClose, o
 
   function submit() {
     if (!form.ticker || !form.entryPrice) return;
-    onSubmit({ ...form, ticker: form.ticker.toUpperCase() });
+    const payload = { ...form, ticker: form.ticker.toUpperCase() };
+    if ((payload.riskDollar === "" || payload.riskDollar == null) && defaultRiskPerTrade !== "") {
+      payload.riskDollar = defaultRiskPerTrade;
+    }
+    onSubmit(payload);
   }
+
+  const labels = t || LANGUAGE_LABELS.en;
 
   return (
     <div className="tj-sheet-backdrop" onClick={onClose}>
       <div className="tj-sheet tj-scroll-hide" onClick={(event) => event.stopPropagation()}>
-        <SheetHeader title={mode === "new" ? "New trade" : "Edit trade"} onClose={onClose} />
+        <SheetHeader title={mode === "new" ? labels.newTrade : labels.editTrade} onClose={onClose} />
         <div style={{ padding: "0 18px 100px" }}>
-          <SectionLabel text="Basic info" />
+          <SectionLabel text={labels.basicInfo} />
           <Row2>
             <div>
-              <label className="tj-label">Ticker</label>
+              <label className="tj-label">{labels.ticker}</label>
               <input className="tj-input tj-input-compact" placeholder="AAPL" value={form.ticker} onChange={(event) => setValue("ticker", event.target.value.toUpperCase())} />
             </div>
             <div>
-              <label className="tj-label">Type</label>
+              <label className="tj-label">{labels.type}</label>
               <div style={{ display: "flex", gap: 6 }}>
-                <button className={cls("tj-chip", form.side === "long" && "on")} style={{ flex: 1 }} onClick={() => setValue("side", "long")}>Long</button>
-                <button className={cls("tj-chip", form.side === "short" && "on")} style={{ flex: 1 }} onClick={() => setValue("side", "short")}>Short</button>
+                <button className={cls("tj-chip", form.side === "long" && "on")} style={{ flex: 1 }} onClick={() => setValue("side", "long")}>{labels.long}</button>
+                <button className={cls("tj-chip", form.side === "short" && "on")} style={{ flex: 1 }} onClick={() => setValue("side", "short")}>{labels.short}</button>
               </div>
             </div>
           </Row2>
           <Row2>
             <div>
-              <label className="tj-label">Date</label>
+              <label className="tj-label">{labels.date}</label>
               <input type="date" className="tj-input tj-input-compact" value={form.entryDate} onChange={(event) => setValue("entryDate", event.target.value)} />
             </div>
             <div>
-              <label className="tj-label">Time in</label>
+              <label className="tj-label">{labels.timeIn}</label>
               <input type="time" className="tj-input tj-input-compact" value={form.entryTime} onChange={(event) => setValue("entryTime", event.target.value)} />
             </div>
           </Row2>
 
-          <SectionLabel text="Entry" />
+          <SectionLabel text={labels.entry} />
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-            <NumField label="Entry price" value={form.entryPrice} onChange={(value) => setValue("entryPrice", value)} />
-            <NumField label="Stop loss" value={form.stopLoss} onChange={(value) => setValue("stopLoss", value)} />
+            <NumField label={labels.entryPrice} value={form.entryPrice} onChange={(value) => setValue("entryPrice", value)} />
+            <NumField label={labels.stopLoss} value={form.stopLoss} onChange={(value) => setValue("stopLoss", value)} />
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-            <NumField label="Take profit" value={form.takeProfit} onChange={(value) => setValue("takeProfit", value)} />
-            <NumField label="Risk ($)" value={form.riskDollar} onChange={(value) => setValue("riskDollar", value)} />
+            <NumField label={labels.takeProfit} value={form.takeProfit} onChange={(value) => setValue("takeProfit", value)} />
+            <NumField label={labels.riskDollar} value={form.riskDollar} onChange={(value) => setValue("riskDollar", value)} />
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
             <div>
-              <label className="tj-label">Position notional</label>
+              <label className="tj-label">{labels.positionNotional}</label>
               <div className="tj-input tj-input-compact tj-mono" style={{ display: "flex", alignItems: "center", minHeight: 34, color: "var(--text-dim)" }}>
                 {computedRisk ? `$${computedRisk.notional}` : "—"}
               </div>
             </div>
-            <NumField label="Position size" value={form.positionSize} onChange={(value) => setValue("positionSize", value)} />
+            <NumField label={labels.positionSize} value={form.positionSize} onChange={(value) => setValue("positionSize", value)} />
           </div>
           <div className="tj-card" style={{ padding: 10, marginBottom: 12, borderColor: "var(--accent-dim)" }}>
-            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-dim)", marginBottom: 6 }}>Position sizing</div>
+            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-dim)", marginBottom: 6 }}>{labels.positionSizing}</div>
             {computedRisk ? (
               <div style={{ display: "grid", gap: 4, fontSize: 13, color: "var(--text)" }}>
-                <div>Risk: <span className="tj-mono" style={{ color: "var(--accent)" }}>${computedRisk.riskDollar}</span></div>
-                <div>Risk per share: <span className="tj-mono" style={{ color: "var(--text-dim)" }}>${computedRisk.riskPerShare}</span></div>
-                <div>{computedRisk.direction}: <span className="tj-mono" style={{ color: "var(--profit)" }}>{computedRisk.positionSize} share(s)</span></div>
+                <div>{labels.risk}: <span className="tj-mono" style={{ color: "var(--accent)" }}>${computedRisk.riskDollar}</span></div>
+                <div>{labels.riskPerShare}: <span className="tj-mono" style={{ color: "var(--text-dim)" }}>${computedRisk.riskPerShare}</span></div>
+                <div>{computedRisk.direction === "Buy" ? labels.buy : labels.sell}: <span className="tj-mono" style={{ color: "var(--profit)" }}>{computedRisk.positionSize} {computedRisk.positionSize === 1 ? labels.share : labels.shares}</span></div>
               </div>
             ) : (
-              <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Enter entry, stop, and risk amount to calculate size.</div>
+              <div style={{ fontSize: 13, color: "var(--text-dim)" }}>{labels.enterEntryStopRisk}</div>
             )}
           </div>
-          <SectionLabel text="Additional" />
+          <SectionLabel text={labels.additional} />
           <div style={{ marginBottom: 14 }}>
-            <label className="tj-label">Setup</label>
+            <label className="tj-label">{labels.setup}</label>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
               {setups.map((setup) => (
                 <div key={setup} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <button className={cls("tj-chip", form.setup === setup && "on")} onClick={() => setValue("setup", setup)}>{setup}</button>
-                  <button className="tj-btn-ghost" style={{ padding: "4px 8px", fontSize: 12 }} onClick={() => { setEditingSetup(setup); setEditingSetupValue(setup); }}>Edit</button>
-                  <button className="tj-btn-ghost" style={{ padding: "4px 8px", fontSize: 12, color: "var(--loss)" }} onClick={() => deleteSetup(setup)}>Delete</button>
+                  <button className="tj-btn-ghost" style={{ padding: "4px 8px", fontSize: 12 }} onClick={() => { setEditingSetup(setup); setEditingSetupValue(setup); }}>{labels.editLabel}</button>
+                  <button className="tj-btn-ghost" style={{ padding: "4px 8px", fontSize: 12, color: "var(--loss)" }} onClick={() => deleteSetup(setup)}>{labels.deleteLabel}</button>
                 </div>
               ))}
             </div>
             {editingSetup && (
               <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
                 <input className="tj-input tj-input-compact" value={editingSetupValue} onChange={(event) => setEditingSetupValue(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); saveSetupEdit(); } }} />
-                <button className="tj-btn-ghost" onClick={saveSetupEdit}>Save</button>
-                <button className="tj-btn-ghost" onClick={() => { setEditingSetup(null); setEditingSetupValue(""); }}>Cancel</button>
+                <button className="tj-btn-ghost" onClick={saveSetupEdit}>{labels.saveLabel}</button>
+                <button className="tj-btn-ghost" onClick={() => { setEditingSetup(null); setEditingSetupValue(""); }}>{labels.cancelLabel}</button>
               </div>
             )}
             <div style={{ display: "flex", gap: 6 }}>
-              <input className="tj-input tj-input-compact" placeholder="Add new setup…" value={newSetup} onChange={(event) => setNewSetup(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addSetup(); } }} />
-              <button className="tj-btn-ghost" onClick={addSetup}>Add</button>
+              <input className="tj-input tj-input-compact" placeholder={labels.addNewSetup} value={newSetup} onChange={(event) => setNewSetup(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addSetup(); } }} />
+              <button className="tj-btn-ghost" onClick={addSetup}>{labels.addLabel}</button>
             </div>
           </div>
 
           <div style={{ marginBottom: 14 }}>
-            <label className="tj-label">Tags</label>
+            <label className="tj-label">{labels.tags}</label>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
               {tags.map((tag) => (
                 <div key={tag} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <button className={cls("tj-chip", form.tags.includes(tag) && "on")} onClick={() => toggleTag(tag)}>{tag}</button>
-                  <button className="tj-btn-ghost" style={{ padding: "4px 8px", fontSize: 12 }} onClick={() => { setEditingTag(tag); setEditingTagValue(tag); }}>Edit</button>
-                  <button className="tj-btn-ghost" style={{ padding: "4px 8px", fontSize: 12, color: "var(--loss)" }} onClick={() => deleteTag(tag)}>Delete</button>
+                  <button className="tj-btn-ghost" style={{ padding: "4px 8px", fontSize: 12 }} onClick={() => { setEditingTag(tag); setEditingTagValue(tag); }}>{labels.editLabel}</button>
+                  <button className="tj-btn-ghost" style={{ padding: "4px 8px", fontSize: 12, color: "var(--loss)" }} onClick={() => deleteTag(tag)}>{labels.deleteLabel}</button>
                 </div>
               ))}
             </div>
             {editingTag && (
               <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
                 <input className="tj-input tj-input-compact" value={editingTagValue} onChange={(event) => setEditingTagValue(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); saveTagEdit(); } }} />
-                <button className="tj-btn-ghost" onClick={saveTagEdit}>Save</button>
-                <button className="tj-btn-ghost" onClick={() => { setEditingTag(null); setEditingTagValue(""); }}>Cancel</button>
+                <button className="tj-btn-ghost" onClick={saveTagEdit}>{labels.saveLabel}</button>
+                <button className="tj-btn-ghost" onClick={() => { setEditingTag(null); setEditingTagValue(""); }}>{labels.cancelLabel}</button>
               </div>
             )}
             <div style={{ display: "flex", gap: 6 }}>
-              <input className="tj-input tj-input-compact" placeholder="Add new tag…" value={newTag} onChange={(event) => setNewTag(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addTag(); } }} />
-              <button className="tj-btn-ghost" onClick={addTag}>Add</button>
+              <input className="tj-input tj-input-compact" placeholder={labels.addNewTag} value={newTag} onChange={(event) => setNewTag(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addTag(); } }} />
+              <button className="tj-btn-ghost" onClick={addTag}>{labels.addLabel}</button>
             </div>
           </div>
 
           <div style={{ marginBottom: 14 }}>
-            <label className="tj-label">Notes</label>
-            <textarea className="tj-input tj-input-compact" rows={3} placeholder="Trade thesis, context, plan…" value={form.notes} onChange={(event) => setValue("notes", event.target.value)} />
+            <label className="tj-label">{labels.notes}</label>
+            <textarea className="tj-input tj-input-compact" rows={3} placeholder={labels.tradeThesisContextPlan} value={form.notes} onChange={(event) => setValue("notes", event.target.value)} />
           </div>
 
           <div style={{ marginBottom: 20 }}>
-            <label className="tj-label">Entry screenshot</label>
+            <label className="tj-label">{labels.entryScreenshot}</label>
             <input type="file" accept="image/*" ref={fileRef} onChange={onImage} style={{ display: "none" }} />
             {form.entryScreenshot ? (
               <div style={{ position: "relative" }}>
                 <img src={form.entryScreenshot} alt="entry" style={{ width: "100%", borderRadius: 10, border: "1px solid var(--border)" }} />
-                <button className="tj-btn-ghost" style={{ marginTop: 8, width: "100%" }} onClick={() => fileRef.current.click()}>Replace image</button>
+                <button className="tj-btn-ghost" style={{ marginTop: 8, width: "100%" }} onClick={() => fileRef.current.click()}>{labels.replaceImage}</button>
               </div>
             ) : (
               <button className="tj-btn-ghost" style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }} onClick={() => fileRef.current.click()}>
-                <Camera size={15} /> Attach screenshot
+                <Camera size={15} /> {labels.attachScreenshot}
               </button>
             )}
           </div>
 
-          <button className="tj-btn-primary" style={{ width: "100%" }} onClick={submit} disabled={!form.ticker || !form.entryPrice}>
-            {mode === "new" ? "Save trade" : "Save changes"}
+          <button className="tj-btn-primary" style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }} onClick={submit} disabled={!form.ticker || !form.entryPrice || isSubmitting}>
+            {isSubmitting ? (
+              <>
+                <span style={{ width: 12, height: 12, border: "2px solid rgba(0,0,0,0.25)", borderTopColor: "currentColor", borderRadius: "50%", display: "inline-block", animation: "spin 0.8s linear infinite" }} />
+                <span>{labels.saving}</span>
+              </>
+            ) : (
+              mode === "new" ? labels.saveTrade : labels.saveChanges
+            )}
           </button>
         </div>
       </div>
@@ -1443,7 +2120,7 @@ function NumField({ label, value, onChange, onBlur }) {
   );
 }
 
-function CloseTradeForm({ trade, onClose, onSubmit }) {
+function CloseTradeForm({ trade, onClose, onSubmit, t }) {
   const [form, setForm] = useState({
     exitPrice: "", exitDate: todayISO(), exitTime: nowTime(),
     exitReason: "", pnl: "", pnlPercent: "", rMultiple: "",
@@ -1469,22 +2146,22 @@ function CloseTradeForm({ trade, onClose, onSubmit }) {
   return (
     <div className="tj-sheet-backdrop" onClick={onClose}>
       <div className="tj-sheet tj-scroll-hide" onClick={(event) => event.stopPropagation()}>
-        <SheetHeader title={`Close ${trade.ticker}`} onClose={onClose} />
+        <SheetHeader title={`${t.closeTrade} ${trade.ticker}`} onClose={onClose} />
         <div style={{ padding: "0 18px 40px" }}>
           <Row2>
-            <NumField label="Exit price" value={form.exitPrice} onChange={(value) => setValue("exitPrice", value)} />
+            <NumField label={t.exitPriceLabel} value={form.exitPrice} onChange={(value) => setValue("exitPrice", value)} />
             <div>
-              <label className="tj-label">Exit reason</label>
-              <input className="tj-input tj-input-compact" placeholder="TP hit, SL hit…" value={form.exitReason} onChange={(event) => setValue("exitReason", event.target.value)} />
+              <label className="tj-label">{t.exitReasonLabel}</label>
+              <input className="tj-input tj-input-compact" placeholder={t.exitReasonPlaceholder} value={form.exitReason} onChange={(event) => setValue("exitReason", event.target.value)} />
             </div>
           </Row2>
           <Row2>
             <div>
-              <label className="tj-label">Close date</label>
+              <label className="tj-label">{t.exitDateLabel}</label>
               <input type="date" className="tj-input tj-input-compact" value={form.exitDate} onChange={(event) => setValue("exitDate", event.target.value)} />
             </div>
             <div>
-              <label className="tj-label">Close time</label>
+              <label className="tj-label">{t.timeIn}</label>
               <input type="time" className="tj-input tj-input-compact" value={form.exitTime} onChange={(event) => setValue("exitTime", event.target.value)} />
             </div>
           </Row2>
@@ -1492,34 +2169,34 @@ function CloseTradeForm({ trade, onClose, onSubmit }) {
             <NumField label="PnL ($)" value={form.pnl} onChange={(value) => setValue("pnl", value)} />
           </Row2>
           <div style={{ marginBottom: 14, width: "calc(50% - 5px)" }}>
-            <NumField label="R-multiple" value={form.rMultiple} onChange={(value) => setValue("rMultiple", value)} />
+            <NumField label={t.rMultipleLabel} value={form.rMultiple} onChange={(value) => setValue("rMultiple", value)} />
           </div>
 
           <div style={{ marginBottom: 14 }}>
-            <label className="tj-label">Comment after trade</label>
-            <textarea className="tj-input" rows={3} placeholder="What went well, what to improve…" value={form.postComment} onChange={(event) => setValue("postComment", event.target.value)} />
+            <label className="tj-label">{t.commentAfterTrade}</label>
+            <textarea className="tj-input" rows={3} placeholder={t.commentAfterTrade} value={form.postComment} onChange={(event) => setValue("postComment", event.target.value)} />
           </div>
 
           <div style={{ marginBottom: 20 }}>
-            <label className="tj-label">Exit screenshot</label>
+            <label className="tj-label">{t.exitScreenshotLabel}</label>
             <input type="file" accept="image/*" ref={fileRef} onChange={onImage} style={{ display: "none" }} />
             {form.exitScreenshot ? (
               <img src={form.exitScreenshot} alt="exit" style={{ width: "100%", borderRadius: 10, border: "1px solid var(--border)" }} />
             ) : (
               <button className="tj-btn-ghost" style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }} onClick={() => fileRef.current.click()}>
-                <Camera size={15} /> Attach screenshot
+                <Camera size={15} /> {t.attachScreenshot}
               </button>
             )}
           </div>
 
-          <button className="tj-btn-primary" style={{ width: "100%" }} onClick={() => onSubmit(form)} disabled={!form.exitPrice}>Close trade</button>
+          <button className="tj-btn-primary" style={{ width: "100%" }} onClick={() => onSubmit(form)} disabled={!form.exitPrice}>{t.closeTrade}</button>
         </div>
       </div>
     </div>
   );
 }
 
-function FilterSheet({ filters, setFilters, setups, tags, onClose }) {
+function FilterSheet({ filters, setFilters, setups, tags, onClose, t }) {
   const [local, setLocal] = useState(filters);
 
   useEffect(() => {
@@ -1549,14 +2226,14 @@ function FilterSheet({ filters, setFilters, setups, tags, onClose }) {
       <div className="tj-sheet tj-scroll-hide" onClick={(event) => event.stopPropagation()}>
         <SheetHeader title="Filters" onClose={onClose} />
         <div style={{ padding: "0 18px 30px" }}>
-          {group("Status", "status", [{ value: "all", label: "All" }, { value: "open", label: "Open" }, { value: "closed", label: "Closed" }])}
-          {group("Direction", "side", [{ value: "all", label: "All" }, { value: "long", label: "Long" }, { value: "short", label: "Short" }])}
-          {group("Result", "result", [{ value: "all", label: "All" }, { value: "profit", label: "Profitable" }, { value: "loss", label: "Losing" }])}
-          {group("Setup", "setup", [{ value: "all", label: "All" }, ...setups.map((setup) => ({ value: setup, label: setup }))])}
-          {group("Tag", "tag", tagOptions)}
+          {group(t.status, "status", [{ value: "all", label: t.all }, { value: "open", label: t.open }, { value: "closed", label: t.closed }])}
+          {group(t.direction, "side", [{ value: "all", label: t.all }, { value: "long", label: t.long }, { value: "short", label: t.short }])}
+          {group(t.result, "result", [{ value: "all", label: t.all }, { value: "profit", label: t.profitable }, { value: "loss", label: t.losing }])}
+          {group(t.setup, "setup", [{ value: "all", label: t.all }, ...setups.map((setup) => ({ value: setup, label: setup }))])}
+          {group(t.tag, "tag", tagOptions)}
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="tj-btn-ghost" style={{ flex: 1 }} onClick={() => { const cleared = { status: "all", side: "all", result: "all", setup: "all", tag: "all" }; setLocal(cleared); setFilters(cleared); }}>Clear all</button>
-            <button className="tj-btn-primary" style={{ flex: 1 }} onClick={() => { setFilters(local); onClose(); }}>Apply</button>
+            <button className="tj-btn-ghost" style={{ flex: 1 }} onClick={() => { const cleared = { status: "all", side: "all", result: "all", setup: "all", tag: "all" }; setLocal(cleared); setFilters(cleared); }}>{t.clearAll}</button>
+            <button className="tj-btn-primary" style={{ flex: 1 }} onClick={() => { setFilters(local); onClose(); }}>{t.apply}</button>
           </div>
         </div>
       </div>
@@ -1564,7 +2241,7 @@ function FilterSheet({ filters, setFilters, setups, tags, onClose }) {
   );
 }
 
-function exportTrades(trades, type, showToast) {
+async function exportTrades(trades, type, showToast, t) {
   const rows = trades.map((trade) => ({
     Ticker: trade.ticker, Side: trade.side, Status: trade.status,
     EntryDate: trade.entryDate, EntryTime: trade.entryTime, EntryPrice: trade.entryPrice,
@@ -1575,20 +2252,22 @@ function exportTrades(trades, type, showToast) {
     RMultiple: trade.rMultiple, Notes: trade.notes, PostComment: trade.postComment,
   }));
 
+  const XLSX = await import("xlsx");
+
   if (type === "csv") {
     const ws = XLSX.utils.json_to_sheet(rows);
     const csv = XLSX.utils.sheet_to_csv(ws);
     downloadBlob(csv, "trading-journal.csv", "text/csv");
-    showToast("CSV exported");
+    showToast(t.exportCsv);
   } else if (type === "xlsx") {
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Trades");
     const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
     downloadBlob(out, "trading-journal.xlsx", "application/octet-stream", true);
-    showToast("Excel exported");
+    showToast(t.exportXlsx);
   } else {
-    showToast("PDF export coming soon — use CSV/Excel for now");
+    showToast(t.exportPdf);
   }
 }
 

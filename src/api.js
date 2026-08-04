@@ -14,6 +14,12 @@ function clearToken() {
 
 async function request(path, options = {}) {
   const token = getToken();
+  const shouldUseLocalFallback = !token && import.meta.env.DEV;
+
+  if (shouldUseLocalFallback) {
+    return null;
+  }
+
   const headers = {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -29,6 +35,9 @@ async function request(path, options = {}) {
   const data = text ? JSON.parse(text) : null;
 
   if (!response.ok) {
+    if ((response.status === 401 || response.status === 403) && !token) {
+      return null;
+    }
     throw new Error(data?.message || data?.error || 'Request failed');
   }
 
