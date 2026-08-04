@@ -279,12 +279,24 @@ function seedTrades() {
 const DEFAULT_SETUPS = ["Pumpt", "Visual", "News"];
 const DEFAULT_TAGS = ["Pumpt", "Visual", "News"];
 
+function normalizeWatchlist(items) {
+  if (!Array.isArray(items)) return [];
+  return items
+    .map((item) => {
+      if (typeof item === "string") return { symbol: item, comment: "" };
+      if (item && typeof item === "object") return { symbol: item.symbol || item.ticker || "", comment: item.comment || "" };
+      return null;
+    })
+    .filter((item) => item && item.symbol);
+}
+
 export default function TradingJournalApp() {
   const [trades, setTrades] = useState([]);
   const [tags, setTags] = useState(DEFAULT_TAGS);
   const [setups, setSetups] = useState(DEFAULT_SETUPS);
   const [watchlist, setWatchlist] = useState([]);
   const [watchlistInput, setWatchlistInput] = useState("");
+  const [watchlistComment, setWatchlistComment] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState("dashboard");
   const [toast, setToast] = useState(null);
@@ -324,7 +336,7 @@ export default function TradingJournalApp() {
           setTrades(t ? JSON.parse(t.value) : seedTrades());
           setTags(g ? JSON.parse(g.value) : DEFAULT_TAGS);
           setSetups(s ? JSON.parse(s.value) : DEFAULT_SETUPS);
-          setWatchlist(w ? JSON.parse(w.value) : []);
+          setWatchlist(normalizeWatchlist(w ? JSON.parse(w.value) : []));
         }
       } catch (e) {
         const t = await STORAGE.get("tj-trades");
@@ -334,7 +346,7 @@ export default function TradingJournalApp() {
         setTrades(t ? JSON.parse(t.value) : seedTrades());
         setTags(g ? JSON.parse(g.value) : DEFAULT_TAGS);
         setSetups(s ? JSON.parse(s.value) : DEFAULT_SETUPS);
-        setWatchlist(w ? JSON.parse(w.value) : []);
+        setWatchlist(normalizeWatchlist(w ? JSON.parse(w.value) : []));
       }
       setLoaded(true);
     })();
@@ -363,14 +375,29 @@ export default function TradingJournalApp() {
   }
 
   function addTicker() {
-    const value = watchlistInput.trim().toUpperCase();
-    if (!value) return;
-    setWatchlist((prev) => (prev.includes(value) ? prev : [...prev, value]));
+    const symbol = watchlistInput.trim().toUpperCase();
+    const comment = watchlistComment.trim();
+    if (!symbol) return;
+    setWatchlist((prev) => {
+      const items = normalizeWatchlist(prev);
+      const existingIndex = items.findIndex((item) => item.symbol === symbol);
+      if (existingIndex >= 0) {
+        const next = [...items];
+        next[existingIndex] = { ...next[existingIndex], comment: comment || next[existingIndex].comment };
+        return next;
+      }
+      return [...items, { symbol, comment }];
+    });
     setWatchlistInput("");
+    setWatchlistComment("");
   }
 
   function removeTicker(symbol) {
-    setWatchlist((prev) => prev.filter((item) => item !== symbol));
+    setWatchlist((prev) => normalizeWatchlist(prev).filter((item) => item.symbol !== symbol));
+  }
+
+  function updateWatchlistComment(symbol, comment) {
+    setWatchlist((prev) => normalizeWatchlist(prev).map((item) => item.symbol === symbol ? { ...item, comment } : item));
   }
 
   async function addTrade(t) {
@@ -531,17 +558,23 @@ export default function TradingJournalApp() {
           <div style={{ padding: 18 }}>
             <div className="tj-display" style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Watchlist</div>
             <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 12 }}>Track your favorite tickers in one place.</div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
               <input className="tj-input tj-input-compact" placeholder="Add ticker (AAPL)" value={watchlistInput} onChange={(event) => setWatchlistInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addTicker(); } }} />
               <button className="tj-btn-primary" onClick={addTicker}>Add</button>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <input className="tj-input tj-input-compact" placeholder="Ticker comment" value={watchlistComment} onChange={(event) => setWatchlistComment(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addTicker(); } }} />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {watchlist.length === 0 ? (
                 <div className="tj-card" style={{ padding: 16, color: "var(--text-dim)", fontSize: 13 }}>No tickers yet.</div>
-              ) : watchlist.map((symbol) => (
-                <div key={symbol} className="tj-card" style={{ padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div className="tj-display" style={{ fontSize: 16, fontWeight: 700 }}>{symbol}</div>
-                  <button className="tj-btn-ghost" style={{ padding: "6px 10px", fontSize: 12 }} onClick={() => removeTicker(symbol)}>Remove</button>
+              ) : watchlist.map((item) => (
+                <div key={item.symbol} className="tj-card" style={{ padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div className="tj-display" style={{ fontSize: 16, fontWeight: 700 }}>{item.symbol}</div>
+                    <input className="tj-input tj-input-compact" style={{ marginTop: 8 }} placeholder="Ticker comment" value={item.comment || ""} onChange={(event) => updateWatchlistComment(item.symbol, event.target.value)} />
+                  </div>
+                  <button className="tj-btn-ghost" style={{ padding: "6px 10px", fontSize: 12 }} onClick={() => removeTicker(item.symbol)}>Remove</button>
                 </div>
               ))}
             </div>
@@ -773,6 +806,9 @@ function StatusBadge({ status }) {
 }
 
 function TradeRow({ trade, onClick }) {
+  const entryStamp = trade.entryDate ? `${trade.entryDate}${trade.entryTime ? ` ${trade.entryTime}` : ""}` : "—";
+  const exitStamp = trade.status === "closed" && trade.exitDate ? `${trade.exitDate}${trade.exitTime ? ` ${trade.exitTime}` : ""}` : null;
+
   return (
     <button onClick={onClick} className="tj-card" style={{ display: "flex", width: "100%", textAlign: "left", padding: 13, marginBottom: 10, alignItems: "center", gap: 12 }}>
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -781,8 +817,9 @@ function TradeRow({ trade, onClick }) {
           <SideBadge side={trade.side} />
           <StatusBadge status={trade.status} />
         </div>
-        <div style={{ fontSize: 11.5, color: "var(--text-faint)", display: "flex", gap: 10 }}>
-          <span>{trade.entryDate}</span>
+        <div style={{ fontSize: 11.5, color: "var(--text-faint)", display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <span>In {entryStamp}</span>
+          {exitStamp && <span>Exit {exitStamp}</span>}
           {trade.setup && <span>· {trade.setup}</span>}
         </div>
       </div>
@@ -1023,8 +1060,9 @@ function TradeDetail({ trade, onClose, onEdit, onDelete, onDuplicate, onCloseTra
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 18 }}>
-            <Field label="Entry date" value={`${trade.entryDate} ${trade.entryTime || ""}`} />
+            <Field label="Entry date" value={trade.entryDate ? `${trade.entryDate} ${trade.entryTime || ""}`.trim() : "—"} />
             <Field label="Entry price" value={trade.entryPrice} />
+            <Field label="Exit date" value={trade.exitDate ? `${trade.exitDate} ${trade.exitTime || ""}`.trim() : "—"} />
             <Field label="Exit price" value={trade.exitPrice} />
             <Field label="Stop loss" value={trade.stopLoss} />
             <Field label="Take profit" value={trade.takeProfit} />
@@ -1152,6 +1190,7 @@ function TradeForm({ mode, initial, setups, setSetups, tags, setTags, onClose, o
     const entryPrice = Number(form.entryPrice);
     const stopLoss = Number(form.stopLoss);
     const riskDollar = Number(form.riskDollar);
+    const positionSize = Number(form.positionSize);
     if (!Number.isFinite(entryPrice) || entryPrice <= 0 || !Number.isFinite(stopLoss) || stopLoss <= 0 || !Number.isFinite(riskDollar) || riskDollar <= 0) {
       return null;
     }
@@ -1159,11 +1198,14 @@ function TradeForm({ mode, initial, setups, setSetups, tags, setTags, onClose, o
     if (!Number.isFinite(riskPerShare) || riskPerShare <= 0) {
       return null;
     }
-    const positionSize = Math.max(1, Math.round(riskDollar / riskPerShare));
+    const normalizedPositionSize = Math.max(1, Math.round(riskDollar / riskPerShare));
+    const effectivePositionSize = Number.isFinite(positionSize) && positionSize > 0 ? positionSize : normalizedPositionSize;
+    const notional = effectivePositionSize * entryPrice;
     return {
       riskDollar: +riskDollar.toFixed(2),
       riskPerShare: +riskPerShare.toFixed(2),
-      positionSize,
+      positionSize: normalizedPositionSize,
+      notional: +notional.toFixed(2),
       direction: form.side === "long" ? "Buy" : "Sell",
     };
   })();
@@ -1287,8 +1329,13 @@ function TradeForm({ mode, initial, setups, setSetups, tags, setTags, onClose, o
             <NumField label="Take profit" value={form.takeProfit} onChange={(value) => setValue("takeProfit", value)} />
             <NumField label="Risk ($)" value={form.riskDollar} onChange={(value) => setValue("riskDollar", value)} />
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-            <div />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+            <div>
+              <label className="tj-label">Position notional</label>
+              <div className="tj-input tj-input-compact tj-mono" style={{ display: "flex", alignItems: "center", minHeight: 34, color: "var(--text-dim)" }}>
+                {computedRisk ? `$${computedRisk.notional}` : "—"}
+              </div>
+            </div>
             <NumField label="Position size" value={form.positionSize} onChange={(value) => setValue("positionSize", value)} />
           </div>
           <div className="tj-card" style={{ padding: 10, marginBottom: 12, borderColor: "var(--accent-dim)" }}>
