@@ -223,8 +223,6 @@ function calcPnl(t) {
 }
 
 function seedTrades() {
-  const setups = ["Pumpt", "Visual", "News"];
-  const tfs = ["5m", "15m", "1H", "4H"];
   const out = [];
   let day = new Date();
   day.setDate(day.getDate() - 30);
@@ -252,9 +250,8 @@ function seedTrades() {
       positionSize: size,
       riskDollar: +(Math.abs(entry - stop) * size).toFixed(2),
       riskPercent: 1,
-      timeframe: tfs[Math.floor(Math.random() * tfs.length)],
-      setup: setups[Math.floor(Math.random() * setups.length)],
-      tags: [["Momentum"], ["News"], ["Fakeout"], []][Math.floor(Math.random() * 4)],
+      setup: "",
+      tags: [],
       notes: "Demo trade generated for preview purposes.",
       entryScreenshot: null,
       exitScreenshot: null,
@@ -389,7 +386,6 @@ export default function TradingJournalApp() {
         positionSize: t.positionSize ? Number(t.positionSize) : undefined,
         riskDollar: t.riskDollar ? Number(t.riskDollar) : undefined,
         riskPercent: t.riskPercent ? Number(t.riskPercent) : undefined,
-        timeframe: t.timeframe,
         setup: t.setup,
         notes: t.notes,
         tags: t.tags || [],
@@ -788,7 +784,6 @@ function TradeRow({ trade, onClick }) {
         <div style={{ fontSize: 11.5, color: "var(--text-faint)", display: "flex", gap: 10 }}>
           <span>{trade.entryDate}</span>
           {trade.setup && <span>· {trade.setup}</span>}
-          {trade.timeframe && <span>· {trade.timeframe}</span>}
         </div>
       </div>
       <div style={{ textAlign: "right" }}>
@@ -1114,7 +1109,7 @@ function TradeForm({ mode, initial, setups, setSetups, tags, setTags, onClose, o
   const [form, setForm] = useState(() => initial || {
     ticker: "", side: "long", entryDate: todayISO(), entryTime: nowTime(),
     entryPrice: "", stopLoss: "", takeProfit: "", positionSize: "",
-    riskDollar: "", riskPercent: "", timeframe: "15m", setup: setups[0] || "",
+    riskDollar: "", riskPercent: "", setup: "",
     tags: [], notes: "", entryScreenshot: null,
   });
   const [newSetup, setNewSetup] = useState("");
@@ -1527,8 +1522,8 @@ function exportTrades(trades, type, showToast) {
     Ticker: trade.ticker, Side: trade.side, Status: trade.status,
     EntryDate: trade.entryDate, EntryTime: trade.entryTime, EntryPrice: trade.entryPrice,
     StopLoss: trade.stopLoss, TakeProfit: trade.takeProfit, PositionSize: trade.positionSize,
-    RiskDollar: trade.riskDollar, RiskPercent: trade.riskPercent, Timeframe: trade.timeframe,
-    Setup: trade.setup, Tags: (trade.tags || []).join("|"), ExitDate: trade.exitDate, ExitTime: trade.exitTime,
+    RiskDollar: trade.riskDollar, RiskPercent: trade.riskPercent, Setup: trade.setup,
+    Tags: (trade.tags || []).join("|"), ExitDate: trade.exitDate, ExitTime: trade.exitTime,
     ExitPrice: trade.exitPrice, ExitReason: trade.exitReason, PnL: trade.pnl, PnLPercent: trade.pnlPercent,
     RMultiple: trade.rMultiple, Notes: trade.notes, PostComment: trade.postComment,
   }));
