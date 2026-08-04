@@ -489,7 +489,6 @@ const LANGUAGE_LABELS = {
     closedShort: "Closed",
     all: "All",
     riskCountByDay: "Risk count by day",
-    riskCountLabel: "Risk count",
     cumulativePnlByDay: "Cumulative P&L by day",
     equityCurve: "Equity curve",
     pnlByDay: "P&L by day",
