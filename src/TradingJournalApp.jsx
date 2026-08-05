@@ -549,7 +549,7 @@ const STYLE = `
   background: var(--accent);
   color: #1A1305;
   border-radius: 999px;
-  width: 56px; height: 56px;
+  width: 48px; height: 48px;
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 8px 24px rgba(232,163,61,0.35);
   z-index: 40;
@@ -562,12 +562,12 @@ const STYLE = `
   left: 50%;
   transform: translateX(-50%);
   width: calc(100% - 36px);
-  max-width: 420px;
+  max-width: 380px;
   z-index: 40;
   box-sizing: border-box;
   padding: 10px;
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
   justify-content: space-between;
   border-radius: 14px;
@@ -577,20 +577,22 @@ const STYLE = `
   box-shadow: 0 10px 30px rgba(3,6,12,0.6), inset 0 1px 0 rgba(255,255,255,0.02);
 }
 .tj-navitem {
-  flex: 1;
+  flex: 0 1 70px;
+  min-width: 64px;
+  max-width: 84px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 3px;
   color: var(--text-dim);
-  font-size: 12px;
-  padding: 8px 10px;
+  font-size: 10px;
+  padding: 4px 6px;
   border-radius: 10px;
   background: linear-gradient(180deg,#ffffff,#f5f5f5);
   border: 1px solid rgba(0,0,0,0.06);
-  box-shadow: 0 6px 14px rgba(0,0,0,0.12);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
 }
-.tj-navitem span { font-size: 12px; color: var(--text-faint); }
+.tj-navitem span { font-size: 10px; color: var(--text-faint); }
 .tj-navitem.active {
   color: var(--accent);
   background: linear-gradient(180deg,#fff,#fff7ee);
@@ -1464,7 +1466,7 @@ export default function TradingJournalApp() {
         )}
 
         <button className="tj-fab" onClick={() => setNewOpen(true)} aria-label="New trade">
-          <Plus size={26} strokeWidth={2.4} />
+          <Plus size={22} strokeWidth={2.2} />
         </button>
 
         <nav className="tj-navbar">
@@ -2099,7 +2101,7 @@ function TradeDetail({ trade, onClose, onEdit, onDelete, onDuplicate, onCloseTra
 
 function SheetHeader({ title, onClose }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 18px 8px", position: "sticky", top: 0, background: "var(--bg)", zIndex: 5 }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 18px 8px", background: "var(--bg)", zIndex: 5 }}>
       <div className="tj-display" style={{ fontSize: 18, fontWeight: 700 }}>{title}</div>
       <button onClick={onClose} style={{ color: "var(--text-dim)" }}><X size={20} /></button>
     </div>
