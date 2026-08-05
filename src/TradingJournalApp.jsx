@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react";
-import { loginWithTelegram, fetchTrades, createTrade, updateTrade, closeTrade, deleteTrade, duplicateTrade } from "./api";
+import { loginWithTelegram, fetchTrades, fetchProfiles, createProfile, updateProfile, createTrade, updateTrade, closeTrade, deleteTrade, deleteProfile, duplicateTrade } from "./api";
 import {
-  Plus, Search, SlidersHorizontal, X, Edit2, Trash2, Copy, Camera,
+  Plus, Search, SlidersHorizontal, Settings, X, Edit2, Trash2, Copy, Camera,
   ChevronRight, Home, BookOpen, BarChart2, Download, Eye,
   ArrowUpRight, ArrowDownRight
 } from "lucide-react";
@@ -23,6 +23,8 @@ const STORAGE = typeof window !== "undefined" && window.storage
       },
     };
 
+const STANDARD_PROFILE_ID = "__standard__";
+
 const LANGUAGE_LABELS = {
   ru: {
     journal: "Журнал",
@@ -35,80 +37,10 @@ const LANGUAGE_LABELS = {
     openTrades: "Открытые сделки",
     totalIncome: "Общий доход",
     recentTrades: "Последние сделки",
-    viewAll: "Посмотреть все",
-    noTrades: "Нет сделок по этому фильтру.",
-    searchPlaceholder: "Поиск по тикеру, заметкам, тегам…",
-    filters: "Фильтры",
-    allTime: "За всё время",
-    last7Days: "Последние 7 дней",
-    last30Days: "Последние 30 дней",
-    last90Days: "Последние 90 дней",
-    thisMonth: "Этот месяц",
-    closedTrades: "закрытые сделки",
-    closed: "Закрыто",
-    open: "Открыто",
-    allTrades: "Все сделки",
-    export: "Экспорт",
-    newestFirst: "Сначала новые",
-    oldestFirst: "Сначала старые",
-    loading: "Загрузка журнала…",
-    loadingStats: "Загрузка статистики…",
-    saving: "Сохраняем...",
-    savingTrade: "Сохранение сделки...",
-    dashboardSubtitle: "Ваш торговый стол в одном взгляде",
-    watchlistIntro: "Отслеживайте любимые тикеры в одном месте.",
-    watchlistAddTickerPlaceholder: "Добавить тикер (AAPL)",
-    watchlistCommentPlaceholder: "Комментарий к тикеру",
-    watchlistEmpty: "Тикеры ещё не добавлены.",
-    watchlistRemove: "Удалить",
-    watchlistAddButton: "Добавить тикер",
-    inLabel: "В",
-    exitLabel: "Выход",
-    entryDateLabel: "Дата входа",
-    exitDateLabel: "Дата выхода",
-    entryPriceLabel: "Цена входа",
-    exitPriceLabel: "Цена выхода",
-    stopLossLabel: "Стоп-лосс",
-    takeProfitLabel: "Тейк-профит",
-    positionSizeLabel: "Размер позиции",
-    riskDollarLabel: "Риск $",
-    riskPercentLabel: "Риск %",
-    defaultRiskLabel: "Стандартный риск за сделку ($)",
-    defaultRiskHint: "Используется для статистики и для новых сделок, если риск не указан",
-    riskCountLabel: "Количество рисков",
-    exitReasonLabel: "Причина выхода",
-    tickerToday: "СЕГОДНЯ",
-    tickerWinRate: "WIN RATE",
-    tickerOpen: "ОТКРЫТО",
-    tickerTrades: "СДЕЛОК",
-    tickerPf: "PF",
-    tickerAvgR: "СР. R",
-    tradeAdded: "Сделка добавлена",
-    tradeUpdated: "Сделка обновлена",
-    tradeDeleted: "Сделка удалена",
-    tradeClosed: "Сделка закрыта",
-    tradeDuplicated: "Сделка продублирована",
-    failedAddTrade: "Не удалось добавить сделку",
-    failedUpdateTrade: "Не удалось обновить сделку",
-    failedDeleteTrade: "Не удалось удалить сделку",
-    failedCloseTrade: "Не удалось закрыть сделку",
-    failedDuplicateTrade: "Не удалось продублировать сделку",
-    exportCsv: "CSV экспортирован",
-    exportXlsx: "Excel экспортирован",
-    exportPdf: "PDF экспорт скоро появится — используйте CSV/Excel",
-    pnlLabel: "P&L",
-    tagsLabel: "Теги",
-    notesLabel: "Заметки",
-    postTradeCommentLabel: "Комментарий после сделки",
-    avgWin: "Средний выигрыш",
-    avgLoss: "Средний проигрыш",
-    longShort: "Long / Short",
-    avgR: "Средний R",
-    bestTrade: "Лучшая сделка",
-    worstTrade: "Худшая сделка",
-    winStreak: "Серия побед",
-    lossStreak: "Серия проигрышей",
-    exitScreenshotLabel: "Скриншот выхода",
+    commentAfterTrade: "Комментарий после сделки",
+    exitReasonPlaceholder: "TP hit, SL hit…",
+    rMultipleLabel: "R-мультипликатор",
+    tradeDetails: "Детали сделки",
     commentAfterTrade: "Комментарий после сделки",
     exitReasonPlaceholder: "TP hit, SL hit…",
     rMultipleLabel: "R-мультипликатор",
@@ -162,10 +94,6 @@ const LANGUAGE_LABELS = {
     russian: "Русский",
     apply: "Применить",
     clearAll: "Очистить всё",
-    status: "Статус",
-    direction: "Направление",
-    result: "Результат",
-    setup: "Стратегия",
     tag: "Тег",
     long: "Long",
     short: "Short",
@@ -335,6 +263,8 @@ const LANGUAGE_LABELS = {
     cumulativePnlByDay: "Накопичувальний P&L по днях",
     equityCurve: "Крива капіталу",
     pnlByDay: "P&L по днях",
+    currentDeposit: "Поточний депозит",
+    standardProfile: "Стандарт",
     statisticsTitle: "Статистика",
     watchlistTitle: "Список спостереження",
   },
@@ -492,6 +422,8 @@ const LANGUAGE_LABELS = {
     cumulativePnlByDay: "Cumulative P&L by day",
     equityCurve: "Equity curve",
     pnlByDay: "P&L by day",
+    currentDeposit: "Current deposit",
+    standardProfile: "Standard",
     statisticsTitle: "Statistics",
     watchlistTitle: "Watchlist",
   },
@@ -626,25 +558,47 @@ const STYLE = `
 
 .tj-navbar {
   position: fixed;
-  bottom: 0;
+  bottom: 12px;
   left: 50%;
   transform: translateX(-50%);
-  width: 100%;
+  width: calc(100% - 36px);
   max-width: 420px;
-  background: rgba(11, 13, 16, 0.7);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border-top: 1px solid rgba(255,255,255,0.08);
-  display: flex;
-  padding: 10px 0 calc(10px + env(safe-area-inset-bottom));
-  z-index: 30;
+  z-index: 40;
   box-sizing: border-box;
+  padding: 10px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(20,24,29,0.75), rgba(11,13,16,0.85));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 10px 30px rgba(3,6,12,0.6), inset 0 1px 0 rgba(255,255,255,0.02);
 }
 .tj-navitem {
-  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
-  color: var(--text-faint); font-size: 10.5px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: linear-gradient(180deg,#ffffff,#f5f5f5);
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.12);
 }
-.tj-navitem.active { color: var(--accent); }
+.tj-navitem span { font-size: 12px; color: var(--text-faint); }
+.tj-navitem.active {
+  color: var(--accent);
+  background: linear-gradient(180deg,#fff,#fff7ee);
+  border-color: rgba(232,163,61,0.15);
+  box-shadow: 0 10px 26px rgba(0,0,0,0.18);
+}
+
+/* removed .tj-navicon per user request */
 
 .tj-badge {
   font-size: 10.5px; font-weight: 600; padding: 3px 8px; border-radius: 999px;
@@ -675,6 +629,7 @@ const STYLE = `
   padding: 10px 16px; border-radius: 10px; font-size: 13px; z-index: 100;
   box-shadow: 0 8px 24px rgba(0,0,0,0.4);
 }
+/* removed stat-icon: reverting last icon-related changes */
 `;
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -793,6 +748,7 @@ export default function TradingJournalApp() {
     return window.localStorage.getItem("tj-language") || "en";
   });
 
+
   const [trades, setTrades] = useState(() => {
     if (typeof window === "undefined") return seedTrades();
     try {
@@ -829,6 +785,34 @@ export default function TradingJournalApp() {
       return [];
     }
   });
+  const [profiles, setProfiles] = useState(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = window.localStorage.getItem("tj-profiles");
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [standardProfile, setStandardProfile] = useState(() => {
+    if (typeof window === "undefined") return { name: "", defaultRiskPerTrade: "", accountSize: "" };
+    try {
+      const raw = window.localStorage.getItem("tj-standard-profile");
+      return raw ? JSON.parse(raw) : { name: "", defaultRiskPerTrade: "", accountSize: "" };
+    } catch {
+      return { name: "", defaultRiskPerTrade: "", accountSize: "" };
+    }
+  });
+  const [activeProfileId, setActiveProfileId] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return window.localStorage.getItem("tj-active-profile") || "";
+  });
+  const [profileName, setProfileName] = useState("");
+  const [profileRisk, setProfileRisk] = useState("");
+  const [profileAccountSize, setProfileAccountSize] = useState("");
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [editingProfileId, setEditingProfileId] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -848,12 +832,15 @@ export default function TradingJournalApp() {
         }
 
         if (initData || hasStoredToken) {
-          const remoteTrades = await fetchTrades();
+          const [remoteTrades, remoteProfiles] = await Promise.all([fetchTrades(activeProfileId), fetchProfiles()]);
           const items = remoteTrades?.items || remoteTrades || [];
-          if (Array.isArray(items) && items.length) {
+          if (Array.isArray(items)) {
             setTrades(items);
           } else {
-            throw new Error("No remote trades");
+            setTrades([]);
+          }
+          if (Array.isArray(remoteProfiles)) {
+            setProfiles(remoteProfiles);
           }
         } else {
           throw new Error("Offline mode");
@@ -900,6 +887,17 @@ export default function TradingJournalApp() {
   useEffect(() => {
     STORAGE.set("tj-watchlist", JSON.stringify(watchlist)).catch(() => {});
   }, [watchlist]);
+  useEffect(() => {
+    STORAGE.set("tj-profiles", JSON.stringify(profiles)).catch(() => {});
+  }, [profiles]);
+  useEffect(() => {
+    STORAGE.set("tj-standard-profile", JSON.stringify(standardProfile)).catch(() => {});
+  }, [standardProfile]);
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("tj-active-profile", activeProfileId);
+    }
+  }, [activeProfileId]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -912,6 +910,32 @@ export default function TradingJournalApp() {
       window.localStorage.setItem("tj-default-risk", defaultRiskPerTrade);
     }
   }, [defaultRiskPerTrade]);
+
+  // Keep global dark background to match app
+  useEffect(() => {
+    try {
+      if (typeof document !== 'undefined') {
+        document.body.style.background = '#0B0D10';
+        document.body.style.color = '#ECEEF1';
+        // ensure CSS variables for dark theme are set on first load
+        const root = document.documentElement;
+        root.style.setProperty('--bg', '#0B0D10');
+        root.style.setProperty('--surface', '#14181D');
+        root.style.setProperty('--surface-2', '#1B2129');
+        root.style.setProperty('--surface-3', '#232B34');
+        root.style.setProperty('--border', '#262E38');
+        root.style.setProperty('--text', '#ECEEF1');
+        root.style.setProperty('--text-dim', '#8A93A1');
+        root.style.setProperty('--text-faint', '#5B6472');
+        root.style.setProperty('--accent', '#E8A33D');
+        root.style.setProperty('--accent-dim', '#4A3A22');
+        root.style.setProperty('--profit', '#3DDC97');
+        root.style.setProperty('--loss', '#F0556B');
+        root.style.setProperty('--long', '#5EC8D8');
+        root.style.setProperty('--short', '#C97BE0');
+      }
+    } catch (e) {}
+  }, []);
 
   function showToast(msg) {
     setToast(msg);
@@ -958,6 +982,7 @@ export default function TradingJournalApp() {
       pnl: null,
       pnlPercent: null,
       rMultiple: null,
+      profileId: activeProfileId || undefined,
       tags: t.tags || [],
     };
 
@@ -977,8 +1002,10 @@ export default function TradingJournalApp() {
         positionSize: t.positionSize ? Number(t.positionSize) : undefined,
         riskDollar: t.riskDollar ? Number(t.riskDollar) : undefined,
         riskPercent: t.riskPercent ? Number(t.riskPercent) : undefined,
+        timeframe: t.timeframe,
         setup: t.setup,
         notes: t.notes,
+        profileId: activeProfileId || undefined,
         tags: t.tags || [],
       });
 
@@ -1078,6 +1105,11 @@ export default function TradingJournalApp() {
 
   const filtered = useMemo(() => {
     let out = trades;
+    if (activeProfileId) {
+      out = out.filter((trade) => trade.profileId === activeProfileId);
+    } else {
+      out = out.filter((trade) => !trade.profileId);
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       out = out.filter((trade) =>
@@ -1092,14 +1124,119 @@ export default function TradingJournalApp() {
     if (filters.setup !== "all") out = out.filter((trade) => trade.setup === filters.setup);
     if (filters.tag !== "all") out = out.filter((trade) => (trade.tags || []).includes(filters.tag));
     return out;
-  }, [trades, search, filters]);
+  }, [trades, activeProfileId, search, filters]);
 
-  const stats = useMemo(() => computeStats(filtered, defaultRiskPerTrade), [filtered, defaultRiskPerTrade]);
+  const activeProfile = useMemo(() => profiles.find((item) => item.id === activeProfileId), [profiles, activeProfileId]);
+  const stats = useMemo(() => computeStats(filtered, defaultRiskPerTrade, activeProfile ? activeProfile.accountSize : standardProfile.accountSize), [filtered, defaultRiskPerTrade, activeProfile?.accountSize, standardProfile.accountSize]);
   const periodPnlStats = useMemo(() => computePeriodPnl(filtered, incomePeriod, defaultRiskPerTrade), [filtered, incomePeriod, defaultRiskPerTrade]);
   const detailTrade = trades.find((trade) => trade.id === detailId) || null;
   const closingTrade = trades.find((trade) => trade.id === closeId) || null;
 
   const t = LANGUAGE_LABELS[language] || LANGUAGE_LABELS.en;
+
+  async function saveProfile() {
+    const name = profileName.trim();
+    if (!name) return;
+    setProfileSaving(true);
+    try {
+      if (editingProfileId === STANDARD_PROFILE_ID) {
+        const nextProfile = {
+          name,
+          defaultRiskPerTrade: profileRisk ? Number(profileRisk) : undefined,
+          accountSize: profileAccountSize ? Number(profileAccountSize) : undefined,
+        };
+        setStandardProfile(nextProfile);
+        setActiveProfileId("");
+        if (nextProfile.defaultRiskPerTrade != null) {
+          setDefaultRiskPerTrade(String(nextProfile.defaultRiskPerTrade));
+        }
+      } else {
+        let profile;
+        if (editingProfileId) {
+          profile = await updateProfile(editingProfileId, {
+            name,
+            defaultRiskPerTrade: profileRisk ? Number(profileRisk) : undefined,
+            accountSize: profileAccountSize ? Number(profileAccountSize) : undefined,
+          });
+        } else {
+          profile = await createProfile({
+            name,
+            defaultRiskPerTrade: profileRisk ? Number(profileRisk) : undefined,
+            accountSize: profileAccountSize ? Number(profileAccountSize) : undefined,
+          });
+        }
+        if (!profile || !profile.id) {
+          throw new Error('Failed to save profile');
+        }
+        setProfiles((prev) => {
+          if (editingProfileId) {
+            return prev.map((item) => (item.id === profile.id ? profile : item));
+          }
+          return [...prev, profile];
+        });
+        setActiveProfileId(profile.id);
+      }
+      setProfileName("");
+      setProfileRisk("");
+      setProfileAccountSize("");
+      setEditingProfileId("");
+    } catch (error) {
+      console.error(error);
+      showToast(error?.message || 'Could not save profile');
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
+  function editProfile(profile) {
+    setProfileName(profile.name ?? "");
+    setProfileRisk(profile.defaultRiskPerTrade != null ? String(profile.defaultRiskPerTrade) : "");
+    setProfileAccountSize(profile.accountSize != null ? String(profile.accountSize) : "");
+    setEditingProfileId(profile.id);
+    setProfileModalOpen(true);
+  }
+
+  function resetProfileForm() {
+    setProfileName("");
+    setProfileRisk("");
+    setProfileAccountSize("");
+    setEditingProfileId("");
+  }
+
+  async function removeProfile(id) {
+    try {
+      await deleteProfile(id);
+      setProfiles((prev) => {
+        const next = prev.filter((item) => item.id !== id);
+        if (activeProfileId === id) {
+          setActiveProfileId(next.length ? next[0].id : '');
+        }
+        return next;
+      });
+      showToast('Profile removed');
+    } catch (error) {
+      console.error(error);
+      showToast(error?.message || 'Could not delete profile');
+    }
+  }
+
+  useEffect(() => {
+    const profile = activeProfileId ? profiles.find((item) => item.id === activeProfileId) : null;
+    if (activeProfileId && !profile) {
+      setActiveProfileId("");
+      return;
+    }
+
+    if (profile) {
+      if (profile.defaultRiskPerTrade != null) {
+        setDefaultRiskPerTrade(String(profile.defaultRiskPerTrade));
+      }
+    } else {
+      if (standardProfile.defaultRiskPerTrade != null && standardProfile.defaultRiskPerTrade !== "") {
+        setDefaultRiskPerTrade(String(standardProfile.defaultRiskPerTrade));
+      }
+    }
+  }, [activeProfileId, profiles, standardProfile]);
 
   return (
     <div className="tj-root">
@@ -1114,8 +1251,153 @@ export default function TradingJournalApp() {
               <button className={cls("tj-chip", language === "en" && "on")} onClick={() => setLanguage("en")}>EN</button>
               <button className={cls("tj-chip", language === "uk" && "on")} onClick={() => setLanguage("uk")}>UA</button>
               <button className={cls("tj-chip", language === "ru" && "on")} onClick={() => setLanguage("ru")}>RU</button>
+              
             </div>
           </div>
+
+          <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <button
+                key="settings"
+                type="button"
+                className={cls("tj-chip")}
+                onClick={() => setProfileModalOpen(true)}
+                aria-label="Profile settings"
+              >
+                <Settings size={16} />
+              </button>
+              <button
+                key="standard"
+                className={cls("tj-chip", !activeProfileId && "on")}
+                onClick={() => setActiveProfileId("")}
+              >
+                {standardProfile.name || t.standardProfile}
+              </button>
+              {profiles.map((profile) => (
+                <button
+                  key={profile.id}
+                  className={cls("tj-chip", activeProfileId === profile.id && "on")}
+                  onClick={() => setActiveProfileId(profile.id)}
+                >
+                  {profile.name}
+                </button>
+              ))}
+            </div>
+          </div>
+          {profileModalOpen && (
+            <div className="tj-sheet-backdrop" onClick={() => setProfileModalOpen(false)}>
+              <div className="tj-sheet tj-scroll-hide" onClick={(event) => event.stopPropagation()}>
+                <SheetHeader title="Profile settings" onClose={() => setProfileModalOpen(false)} />
+                <div style={{ padding: "0 18px 20px" }}>
+                  <div style={{ display: "grid", gap: 16, marginTop: 12 }}>
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                        <div className="tj-subtitle">Existing profiles</div>
+                        <div className="tj-mono" style={{ fontSize: 12, color: "var(--text-dim)" }}>
+                          Select one to use it for trades
+                        </div>
+                      </div>
+                      <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+                        {profiles.length > 0 || standardProfile ? (
+                          <>
+                            <div key="standard-profile" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: 12, border: "1px solid var(--border)", borderRadius: 12, background: !activeProfileId ? "var(--surface-emphasis)" : "transparent" }}>
+                              <button
+                                type="button"
+                                className="tj-chip"
+                                style={{ flex: 1, justifyContent: "flex-start", border: "none", background: "transparent", padding: 0 }}
+                                onClick={() => setActiveProfileId("")}
+                              >
+                                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+                                  <div>{standardProfile.name || t.standardProfile}</div>
+                                  <div className="tj-mono" style={{ fontSize: 11, color: "var(--text-dim)" }}>
+                                    {standardProfile.accountSize ? `Account: ${standardProfile.accountSize}` : "No account size"}
+                                    {standardProfile.defaultRiskPerTrade ? ` • Risk: $${standardProfile.defaultRiskPerTrade}` : ""}
+                                  </div>
+                                </div>
+                              </button>
+                              <div style={{ display: "flex", gap: 8 }}>
+                                <button type="button" className="tj-btn-ghost" onClick={() => editProfile({ id: STANDARD_PROFILE_ID, ...standardProfile })}>
+                                  <Edit2 size={16} />
+                                </button>
+                              </div>
+                            </div>
+                            {profiles.map((profile) => (
+                              <div key={profile.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: 12, border: "1px solid var(--border)", borderRadius: 12, background: activeProfileId === profile.id ? "var(--surface-emphasis)" : "transparent" }}>
+                                <button
+                                  type="button"
+                                  className="tj-chip"
+                                  style={{ flex: 1, justifyContent: "flex-start", border: "none", background: "transparent", padding: 0 }}
+                                  onClick={() => setActiveProfileId(profile.id)}
+                                >
+                                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+                                    <div>{profile.name}</div>
+                                    <div className="tj-mono" style={{ fontSize: 11, color: "var(--text-dim)" }}>
+                                      {profile.accountSize ? `Account: ${profile.accountSize}` : "No account size"}
+                                      {profile.defaultRiskPerTrade ? ` • Risk: $${profile.defaultRiskPerTrade}` : ""}
+                                    </div>
+                                  </div>
+                                </button>
+                                <div style={{ display: "flex", gap: 8 }}>
+                                  <button type="button" className="tj-btn-ghost" onClick={() => editProfile(profile)}>
+                                    <Edit2 size={16} />
+                                  </button>
+                                  <button type="button" className="tj-btn-ghost" onClick={() => removeProfile(profile.id)}>
+                                    <Trash2 size={16} />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </>
+                        ) : (
+                          <div className="tj-mono" style={{ color: "var(--text-dim)" }}>
+                            No profiles yet. Create one below.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="tj-subtitle">Create new profile</div>
+                      <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
+                        <div>
+                          <label className="tj-label">Profile name</label>
+                          <input
+                            className="tj-input tj-input-compact"
+                            placeholder="Profile name"
+                            value={profileName}
+                            onChange={(event) => setProfileName(event.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="tj-label">Default risk per trade</label>
+                          <input
+                            className="tj-input tj-input-compact"
+                            placeholder="e.g. 50"
+                            value={profileRisk}
+                            onChange={(event) => setProfileRisk(event.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="tj-label">Account size</label>
+                          <input
+                            className="tj-input tj-input-compact"
+                            placeholder="e.g. 10000"
+                            value={profileAccountSize}
+                            onChange={(event) => setProfileAccountSize(event.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
+                    <button className="tj-btn-ghost" onClick={() => { resetProfileForm(); setProfileModalOpen(false); }}>{t.cancelLabel}</button>
+                    <button className="tj-btn-primary" onClick={saveProfile} disabled={profileSaving}>
+                      {profileSaving ? "Saving..." : editingProfileId ? "Save changes" : "Create profile"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {tab === "dashboard" && (
@@ -1357,11 +1639,15 @@ function getRiskAdjustedPnl(trade, defaultRiskPerTrade) {
   return risk && risk > 0 ? Number(trade.pnl) / risk : Number(trade.pnl) || 0;
 }
 
-function computeStats(trades, defaultRiskPerTrade) {
+function computeStats(trades, defaultRiskPerTrade, accountSize) {
   const closed = trades.filter((trade) => trade.status === "closed" && trade.pnl != null);
   const open = trades.filter((trade) => trade.status === "open");
   const adjustedPnls = closed.map((trade) => getRiskAdjustedPnl(trade, defaultRiskPerTrade));
   const totalPnl = adjustedPnls.reduce((sum, value) => sum + value, 0);
+  const totalPnlDollar = closed.reduce((sum, trade) => sum + Number(trade.pnl || 0), 0);
+  const currentDeposit = accountSize != null && Number.isFinite(Number(accountSize))
+    ? Number(accountSize) + totalPnlDollar
+    : undefined;
   const riskCount = closed.reduce((sum, trade) => sum + getTradeRiskCount(trade, defaultRiskPerTrade), 0);
   const todayKey = getTodayKey();
   const todayPnl = closed.reduce((sum, trade) => (trade.exitDate === todayKey ? sum + trade.pnl : sum), 0);
@@ -1412,7 +1698,7 @@ function computeStats(trades, defaultRiskPerTrade) {
     }, []);
 
   return {
-    totalPnl, todayPnl, totalPnlPct, winRate, tradeCount: trades.length, closedCount: closed.length,
+    totalPnl, totalPnlDollar, currentDeposit, todayPnl, totalPnlPct, winRate, tradeCount: trades.length, closedCount: closed.length,
     riskCount,
     openCount: open.length, longCount: trades.filter((trade) => trade.side === "long").length,
     shortCount: trades.filter((trade) => trade.side === "short").length,
@@ -1424,7 +1710,7 @@ function computeStats(trades, defaultRiskPerTrade) {
 function NavItem({ icon: Icon, label, active, onClick }) {
   return (
     <button className={cls("tj-navitem", active && "active")} onClick={onClick}>
-      <Icon size={20} strokeWidth={active ? 2.4 : 1.8} />
+      <Icon size={18} strokeWidth={active ? 2.2 : 1.6} />
       <span>{label}</span>
     </button>
   );
@@ -1537,19 +1823,23 @@ function Dashboard({ stats, search, setSearch, onOpenFilter, onOpenDetail, filte
       </div>
 
       <div style={{ padding: "14px 16px 4px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <div className="tj-card" style={{ padding: 14 }}>
-          <div className="tj-label" style={{ marginBottom: 8 }}>{t.todayPnL}</div>
-          <PnlText value={stats.todayPnl} size={20} />
-        </div>
-        <div className="tj-card" style={{ padding: 14 }}>
+        <div className="tj-card" style={{ padding: 14, position: 'relative' }}>
+            <div className="stat-icon"><BarChart2 size={18} strokeWidth={1.6} /></div>
+            <div className="tj-label" style={{ marginBottom: 8 }}>{t.todayPnL}</div>
+            <PnlText value={stats.todayPnl} size={20} />
+          </div>
+        <div className="tj-card" style={{ padding: 14, position: 'relative' }}>
+          <div className="stat-icon"><Eye size={18} strokeWidth={1.6} /></div>
           <div className="tj-label" style={{ marginBottom: 8 }}>{t.winRate}</div>
           <div className="tj-mono" style={{ fontSize: 20, fontWeight: 600 }}>{fmt2(periodPnlStats.winRate)}%</div>
         </div>
-        <div className="tj-card" style={{ padding: 14 }}>
+        <div className="tj-card" style={{ padding: 14, position: 'relative' }}>
+          <div className="stat-icon"><BarChart2 size={18} strokeWidth={1.6} /></div>
           <div className="tj-label" style={{ marginBottom: 8 }}>{t.profitFactor}</div>
           <div className="tj-mono" style={{ fontSize: 20, fontWeight: 600 }}>{periodPnlStats.profitFactor === Infinity ? "∞" : fmt2(periodPnlStats.profitFactor)}</div>
         </div>
-        <div className="tj-card" style={{ padding: 14 }}>
+        <div className="tj-card" style={{ padding: 14, position: 'relative' }}>
+          <div className="stat-icon"><ArrowUpRight size={18} strokeWidth={1.6} /></div>
           <div className="tj-label" style={{ marginBottom: 8 }}>{t.openTrades}</div>
           <div className="tj-mono" style={{ fontSize: 20, fontWeight: 600, color: "var(--accent)" }}>{stats.openCount}</div>
         </div>
@@ -1602,7 +1892,7 @@ function Dashboard({ stats, search, setSearch, onOpenFilter, onOpenDetail, filte
       <div style={{ padding: "0 16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)" }}>{t.recentTrades}</div>
-          <button onClick={goJournal} style={{ fontSize: 12, color: "var(--accent)" }}>{t.viewAll}</button>
+          <button onClick={goJournal} className="tj-chip" style={{ fontSize: 12, padding: '6px 10px', borderRadius: 8 }}>{t.viewAll}</button>
         </div>
         {recent.length === 0 && <EmptyState text={t.noTrades} />}
         {recent.map((trade) => <TradeRow key={trade.id} trade={trade} onClick={() => onOpenDetail(trade.id)} t={t} />)}
@@ -1667,6 +1957,7 @@ function StatsScreen({ stats, trades, onOpenFilter, filtersActive, t }) {
         <div>
           <div className="tj-display" style={{ fontSize: 20, fontWeight: 700 }}>{t.statisticsTitle}</div>
           <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{stats.closedCount} {t.closed} · {stats.openCount} {t.open}</div>
+          <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginTop: 6 }}>{t.currentDeposit}: {stats.currentDeposit != null ? `$${fmt2(stats.currentDeposit)}` : "—"}</div>
         </div>
         <button className="tj-btn-ghost" style={{ padding: "8px 12px", position: "relative" }} onClick={onOpenFilter}>
           <SlidersHorizontal size={16} />
