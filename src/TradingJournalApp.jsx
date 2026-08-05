@@ -1649,8 +1649,15 @@ function computeStats(trades, defaultRiskPerTrade, accountSize) {
     ? Number(accountSize) + totalPnlDollar
     : undefined;
   const riskCount = closed.reduce((sum, trade) => sum + getTradeRiskCount(trade, defaultRiskPerTrade), 0);
+  const now = new Date();
   const todayKey = getTodayKey();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const todayPnl = closed.reduce((sum, trade) => (trade.exitDate === todayKey ? sum + trade.pnl : sum), 0);
+  const monthPnl = closed.reduce((sum, trade) => {
+    if (!trade.exitDate) return sum;
+    const exitDate = new Date(`${trade.exitDate}T00:00:00`);
+    return exitDate >= monthStart && exitDate <= now ? sum + trade.pnl : sum;
+  }, 0);
   const totalPnlPct = closed.reduce((sum, trade) => sum + (trade.pnlPercent || 0), 0);
   const wins = adjustedPnls.filter((value) => value > 0);
   const losses = adjustedPnls.filter((value) => value <= 0);
@@ -1698,7 +1705,7 @@ function computeStats(trades, defaultRiskPerTrade, accountSize) {
     }, []);
 
   return {
-    totalPnl, totalPnlDollar, currentDeposit, todayPnl, totalPnlPct, winRate, tradeCount: trades.length, closedCount: closed.length,
+    totalPnl, totalPnlDollar, currentDeposit, todayPnl, monthPnl, totalPnlPct, winRate, tradeCount: trades.length, closedCount: closed.length,
     riskCount,
     openCount: open.length, longCount: trades.filter((trade) => trade.side === "long").length,
     shortCount: trades.filter((trade) => trade.side === "short").length,
@@ -1957,7 +1964,12 @@ function StatsScreen({ stats, trades, onOpenFilter, filtersActive, t }) {
         <div>
           <div className="tj-display" style={{ fontSize: 20, fontWeight: 700 }}>{t.statisticsTitle}</div>
           <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{stats.closedCount} {t.closed} · {stats.openCount} {t.open}</div>
-          <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginTop: 6 }}>{t.currentDeposit}: {stats.currentDeposit != null ? `$${fmt2(stats.currentDeposit)}` : "—"}</div>
+          <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginTop: 6 }}>
+            {t.currentDeposit}: {stats.currentDeposit != null ? `$${fmt2(stats.currentDeposit)}` : "—"}
+            {stats.monthPnl != null && (
+              <span style={{ marginLeft: 6, color: stats.monthPnl >= 0 ? "var(--profit)" : "var(--loss)" }}>( {stats.monthPnl >= 0 ? "+" : ""}{fmt2(stats.monthPnl)}$ • this month )</span>
+            )}
+          </div>
         </div>
         <button className="tj-btn-ghost" style={{ padding: "8px 12px", position: "relative" }} onClick={onOpenFilter}>
           <SlidersHorizontal size={16} />

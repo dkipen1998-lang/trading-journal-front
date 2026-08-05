@@ -106,7 +106,7 @@ export async function fetchTrades(profileId) {
 
 export async function fetchProfiles() {
   const token = getToken();
-  const shouldUseLocalFallback = !token && import.meta.env.DEV;
+  const shouldUseLocalFallback = !token;
   if (shouldUseLocalFallback) {
     return readLocalProfiles();
   }
@@ -115,7 +115,7 @@ export async function fetchProfiles() {
 
 export async function createProfile(profile) {
   const token = getToken();
-  const shouldUseLocalFallback = !token && import.meta.env.DEV;
+  const shouldUseLocalFallback = !token;
   if (shouldUseLocalFallback) {
     const profiles = readLocalProfiles();
     const createdProfile = {
@@ -140,7 +140,7 @@ export async function createProfile(profile) {
 
 export async function updateProfile(id, profile) {
   const token = getToken();
-  const shouldUseLocalFallback = !token && import.meta.env.DEV;
+  const shouldUseLocalFallback = !token;
   if (shouldUseLocalFallback) {
     const profiles = readLocalProfiles();
     const nextProfiles = profiles.map((item) =>
@@ -158,9 +158,8 @@ export async function updateProfile(id, profile) {
 
 export async function deleteProfile(id) {
   const token = getToken();
-  const shouldUseLocalFallback = !token && import.meta.env.DEV;
+  const shouldUseLocalFallback = !token;
   if (shouldUseLocalFallback) {
-    const profiles = readLocalProfiles();
     const nextProfiles = profiles.filter((item) => item.id !== id);
     writeLocalProfiles(nextProfiles);
     return { deleted: true };
