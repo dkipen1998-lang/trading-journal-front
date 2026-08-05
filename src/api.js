@@ -105,69 +105,39 @@ export async function fetchTrades(profileId) {
 }
 
 export async function fetchProfiles() {
-  const token = getToken();
-  const shouldUseLocalFallback = !token;
-  if (shouldUseLocalFallback) {
-    return readLocalProfiles();
-  }
-  return request('/profiles');
+  return readLocalProfiles();
 }
 
 export async function createProfile(profile) {
-  const token = getToken();
-  const shouldUseLocalFallback = !token;
-  if (shouldUseLocalFallback) {
-    const profiles = readLocalProfiles();
-    const createdProfile = {
-      id: generateId(),
-      name: profile.name,
-      defaultRiskPerTrade: profile.defaultRiskPerTrade ?? null,
-      accountSize: profile.accountSize ?? null,
-      settings: profile.settings ?? null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    const nextProfiles = [...profiles, createdProfile];
-    writeLocalProfiles(nextProfiles);
-    return createdProfile;
-  }
-
-  return request('/profiles', {
-    method: 'POST',
-    body: JSON.stringify(profile),
-  });
+  const profiles = readLocalProfiles();
+  const createdProfile = {
+    id: generateId(),
+    name: profile.name,
+    defaultRiskPerTrade: profile.defaultRiskPerTrade ?? null,
+    accountSize: profile.accountSize ?? null,
+    settings: profile.settings ?? null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  const nextProfiles = [...profiles, createdProfile];
+  writeLocalProfiles(nextProfiles);
+  return createdProfile;
 }
 
 export async function updateProfile(id, profile) {
-  const token = getToken();
-  const shouldUseLocalFallback = !token;
-  if (shouldUseLocalFallback) {
-    const profiles = readLocalProfiles();
-    const nextProfiles = profiles.map((item) =>
-      item.id === id ? { ...item, ...profile, updatedAt: new Date().toISOString() } : item,
-    );
-    writeLocalProfiles(nextProfiles);
-    return nextProfiles.find((item) => item.id === id);
-  }
-
-  return request(`/profiles/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify(profile),
-  });
+  const profiles = readLocalProfiles();
+  const nextProfiles = profiles.map((item) =>
+    item.id === id ? { ...item, ...profile, updatedAt: new Date().toISOString() } : item,
+  );
+  writeLocalProfiles(nextProfiles);
+  return nextProfiles.find((item) => item.id === id);
 }
 
 export async function deleteProfile(id) {
-  const token = getToken();
-  const shouldUseLocalFallback = !token;
-  if (shouldUseLocalFallback) {
-    const nextProfiles = profiles.filter((item) => item.id !== id);
-    writeLocalProfiles(nextProfiles);
-    return { deleted: true };
-  }
-
-  return request(`/profiles/${id}`, {
-    method: 'DELETE',
-  });
+  const profiles = readLocalProfiles();
+  const nextProfiles = profiles.filter((item) => item.id !== id);
+  writeLocalProfiles(nextProfiles);
+  return { deleted: true };
 }
 
 export async function createTrade(trade) {
