@@ -1,4 +1,6 @@
 const API_BASE = import.meta.env.VITE_API_URL || 'https://trading-journal-backend-eili.onrender.com/api';
+const FINNHUB_BASE = 'https://finnhub.io/api/v1';
+const FINNHUB_API_KEY = import.meta.env.VITE_FINNHUB_API_KEY || 'demo';
 
 function getToken() {
   return localStorage.getItem('tj_token') || '';
@@ -80,6 +82,81 @@ async function request(path, options = {}) {
   }
 
   return data;
+}
+
+async function requestFinnhub(path) {
+  const isDemoKey = (FINNHUB_API_KEY || '').trim().toLowerCase() === 'demo';
+  if (isDemoKey) {
+    return null;
+  }
+
+  const url = `${FINNHUB_BASE}${path}${path.includes('?') ? '&' : '?'}token=${FINNHUB_API_KEY}`;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      return null;
+    }
+    return response.json();
+  } catch {
+    return null;
+  }
+}
+
+async function requestBinance(path) {
+  try {
+    const response = await fetch(`https://api.binance.com/api/v3${path}`);
+    if (!response.ok) {
+      return null;
+    }
+    return response.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchStockSnapshot(symbol) {
+  const normalizedSymbol = (symbol || '').trim().toUpperCase();
+  if (!normalizedSymbol || !/^[A-Z0-9.\-]+$/.test(normalizedSymbol)) {
+    return null;
+  }
+
+  const isCrypto = /^(BTC|ETH|BNB|SOL|XRP|ADA|DOGE|TRX|AVAX|LINK|DOT|LTC|NEAR|TON|SHIB|BCH|MATIC|UNI|ATOM|ICP|APT|SUI|XMR|FIL|ARB|OP|WIF|PEPE)/i.test(normalizedSymbol);
+
+  if (isCrypto) {
+    const pair = normalizedSymbol.replace(/USD$/i, 'USDT');
+    const quote = await requestBinance(`/ticker/24hr?symbol=${encodeURIComponent(pair)}`);
+    return {
+      price: typeof quote?.lastPrice === 'string' ? Number(quote.lastPrice) : null,
+      change: typeof quote?.priceChange === 'string' ? Number(quote.priceChange) : null,
+      changePercent: typeof quote?.priceChangePercent === 'string' ? Number(quote.priceChangePercent) : null,
+      logo: '',
+      exchange: 'Binance',
+      currency: 'USDT',
+      name: normalizedSymbol,
+    };
+  }
+
+  const [quote, profile] = await Promise.all([
+    requestFinnhub(`/quote?symbol=${encodeURIComponent(normalizedSymbol)}`),
+    requestFinnhub(`/stock/profile2?symbol=${encodeURIComponent(normalizedSymbol)}`),
+  ]);
+
+  const preMarketPrice = quote?.preMarketPrice ?? quote?.preMarket ?? quote?.preMarketStart ?? null;
+  const preMarketChange = quote?.preMarketChange ?? null;
+  const preMarketChangePercent = quote?.preMarketChangePercent ?? quote?.preMarketPercentChange ?? null;
+
+  return {
+    price: typeof quote?.c === 'number' ? quote.c : quote?.c ?? null,
+    change: typeof quote?.d === 'number' ? quote.d : quote?.d ?? null,
+    changePercent: typeof quote?.dp === 'number' ? quote.dp : quote?.dp ?? null,
+    preMarketPrice: preMarketPrice != null ? Number(preMarketPrice) : null,
+    preMarketChange: preMarketChange != null ? Number(preMarketChange) : null,
+    preMarketChangePercent: preMarketChangePercent != null ? Number(preMarketChangePercent) : null,
+    logo: profile?.logo || '',
+    exchange: profile?.exchange || '',
+    currency: profile?.currency || '',
+    name: profile?.name || '',
+  };
 }
 
 export async function loginWithTelegram(initData) {

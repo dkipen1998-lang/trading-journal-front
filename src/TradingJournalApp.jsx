@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react";
-import { loginWithTelegram, fetchTrades, fetchProfiles, createProfile, updateProfile, createTrade, updateTrade, closeTrade, deleteTrade, deleteProfile, duplicateTrade } from "./api";
+import { loginWithTelegram, fetchTrades, fetchProfiles, createProfile, updateProfile, createTrade, updateTrade, closeTrade, deleteTrade, deleteProfile, duplicateTrade, fetchStockSnapshot } from "./api";
 import {
   Plus, Search, SlidersHorizontal, Settings, X, Edit2, Trash2, Copy, Camera,
   ChevronRight, Home, BookOpen, BarChart2, Download, Eye,
@@ -108,6 +108,34 @@ const LANGUAGE_LABELS = {
     pnlByDay: "P&L по дням",
     statisticsTitle: "Статистика",
     watchlistTitle: "Список наблюдения",
+    screener: "Скринер",
+    screenerTitle: "Скринер рынка",
+    screenerSubtitle: "Ищите инструменты по сектору, росту, объему и другим критериям.",
+    premarketLabel: "Премаркет",
+    screenerSearchPlaceholder: "Поиск по тикеру, названию или сектору",
+    screenerAllSectors: "Все секторы",
+    screenerAllInstruments: "Все инструменты",
+    screenerMinChange: "Мин. % роста",
+    screenerMinVolume: "Мин. объем",
+    screenerMinPrice: "Мин. цена",
+    screenerSortGrowth: "% роста",
+    screenerSortVolume: "Объем",
+    screenerSortPrice: "Цена",
+    screenerSortMarketCap: "Рыночная капитализация",
+    screenerSortDesc: "По убыванию",
+    screenerSortAsc: "По возрастанию",
+    screenerSaveFilter: "Сохранить фильтр",
+    screenerFilterName: "Название фильтра",
+    screenerLoading: "Загрузка данных скринера…",
+    screenerVol: "Объем",
+    screenerAlert: "Оповещение",
+    screenerAlertPrice: "Целевая цена",
+    screenerAlertAbove: "Выше",
+    screenerAlertBelow: "Ниже",
+    screenerAlertSave: "Сохранить",
+    screenerAlerts: "Оповещения",
+    screenerAlertPlaceholder: "Введите цену",
+    screenerAlertEmpty: "Оповещений пока нет",
   },
   uk: {
     journal: "Журнал",
@@ -267,6 +295,34 @@ const LANGUAGE_LABELS = {
     standardProfile: "Стандарт",
     statisticsTitle: "Статистика",
     watchlistTitle: "Список спостереження",
+    screener: "Скрінер",
+    screenerTitle: "Скрінер ринку",
+    screenerSubtitle: "Шукайте інструменти за сектором, зростанням, обсягом та іншими критеріями.",
+    premarketLabel: "Премаркет",
+    screenerSearchPlaceholder: "Пошук за тикером, назвою або сектором",
+    screenerAllSectors: "Усі сектори",
+    screenerAllInstruments: "Усі інструменти",
+    screenerMinChange: "Мін. % росту",
+    screenerMinVolume: "Мін. обсяг",
+    screenerMinPrice: "Мін. ціна",
+    screenerSortGrowth: "% росту",
+    screenerSortVolume: "Обсяг",
+    screenerSortPrice: "Ціна",
+    screenerSortMarketCap: "Ринкова капіталізація",
+    screenerSortDesc: "За спаданням",
+    screenerSortAsc: "За зростанням",
+    screenerSaveFilter: "Зберегти фільтр",
+    screenerFilterName: "Назва фільтра",
+    screenerLoading: "Завантаження даних скрінера…",
+    screenerVol: "Обсяг",
+    screenerAlert: "Сповіщення",
+    screenerAlertPrice: "Цільова ціна",
+    screenerAlertAbove: "Вище",
+    screenerAlertBelow: "Нижче",
+    screenerAlertSave: "Зберегти",
+    screenerAlerts: "Сповіщення",
+    screenerAlertPlaceholder: "Введіть ціну",
+    screenerAlertEmpty: "Поки немає сповіщень",
   },
   en: {
     journal: "Journal",
@@ -426,6 +482,34 @@ const LANGUAGE_LABELS = {
     standardProfile: "Standard",
     statisticsTitle: "Statistics",
     watchlistTitle: "Watchlist",
+    screener: "Screener",
+    screenerTitle: "Market Screener",
+    screenerSubtitle: "Screen instruments by sector, growth, volume and other criteria.",
+    premarketLabel: "Premarket",
+    screenerSearchPlaceholder: "Search by symbol, name or sector",
+    screenerAllSectors: "All sectors",
+    screenerAllInstruments: "All instruments",
+    screenerMinChange: "Min % change",
+    screenerMinVolume: "Min volume",
+    screenerMinPrice: "Min price",
+    screenerSortGrowth: "% growth",
+    screenerSortVolume: "Volume",
+    screenerSortPrice: "Price",
+    screenerSortMarketCap: "Market cap",
+    screenerSortDesc: "Descending",
+    screenerSortAsc: "Ascending",
+    screenerSaveFilter: "Save filter",
+    screenerFilterName: "Filter name",
+    screenerLoading: "Loading screener data…",
+    screenerVol: "Volume",
+    screenerAlert: "Alert",
+    screenerAlertPrice: "Target price",
+    screenerAlertAbove: "Above",
+    screenerAlertBelow: "Below",
+    screenerAlertSave: "Save",
+    screenerAlerts: "Alerts",
+    screenerAlertPlaceholder: "Enter target price",
+    screenerAlertEmpty: "No alerts yet",
   },
 };
 
@@ -637,8 +721,61 @@ const STYLE = `
 const uid = () => Math.random().toString(36).slice(2, 10);
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const nowTime = () => new Date().toTimeString().slice(0, 5);
-const fmt2 = (n) => (Math.round((n + Number.EPSILON) * 100) / 100).toLocaleString();
+const fmt2 = (n) => {
+  if (n == null || Number.isNaN(Number(n))) return "—";
+  return (Math.round((Number(n) + Number.EPSILON) * 100) / 100).toLocaleString();
+};
 const cls = (...a) => a.filter(Boolean).join(" ");
+const formatStockPrice = (value, currency = "USD") => {
+  if (value == null || Number.isNaN(Number(value))) return "—";
+  const normalizedCurrency = typeof currency === "string" ? currency.trim().toUpperCase() : "";
+  const numericValue = Number(value);
+
+  if (!/^[A-Z]{3}$/.test(normalizedCurrency)) {
+    return new Intl.NumberFormat("en-US", {
+      maximumFractionDigits: 2,
+    }).format(numericValue);
+  }
+
+  try {
+    const formatter = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: normalizedCurrency,
+      maximumFractionDigits: 2,
+    });
+    return formatter.format(numericValue);
+  } catch {
+    return new Intl.NumberFormat("en-US", {
+      maximumFractionDigits: 2,
+    }).format(numericValue);
+  }
+};
+const normalizeTicker = (value) => (value || "").trim().toUpperCase();
+function resolveTradeMetrics(trade, snapshot) {
+  if (!trade || trade.status !== "open") {
+    return {
+      pnl: trade?.pnl ?? null,
+      pnlPercent: trade?.pnlPercent ?? null,
+      rMultiple: trade?.rMultiple ?? null,
+    };
+  }
+
+  const currentPrice = snapshot?.price ?? trade?.currentPrice ?? null;
+  if (currentPrice == null || trade.entryPrice == null || trade.positionSize == null || trade.positionSize === "") {
+    return {
+      pnl: trade?.pnl ?? null,
+      pnlPercent: trade?.pnlPercent ?? null,
+      rMultiple: trade?.rMultiple ?? null,
+    };
+  }
+
+  const { pnl, pnlPct, r } = calcPnl({ ...trade, exitPrice: currentPrice });
+  return {
+    pnl: pnl != null ? +pnl.toFixed(2) : null,
+    pnlPercent: pnlPct != null ? +pnlPct.toFixed(2) : null,
+    rMultiple: r != null ? +r.toFixed(2) : null,
+  };
+}
 
 function calcPnl(t) {
   if (t.exitPrice == null || t.exitPrice === "" || !t.entryPrice || !t.positionSize) return { pnl: null, pnlPct: null, r: null };
@@ -652,6 +789,54 @@ function calcPnl(t) {
     r = riskPerUnit ? ((Number(t.exitPrice) - Number(t.entryPrice)) * dir) / riskPerUnit : null;
   }
   return { pnl, pnlPct, r };
+}
+
+function createTradeChartScreenshot(trade, closeData = {}) {
+  if (typeof window === "undefined") return null;
+  const entryPrice = Number(trade?.entryPrice);
+  const exitPrice = Number(closeData?.exitPrice ?? trade?.exitPrice ?? entryPrice);
+  const stopLoss = Number(closeData?.stopLoss ?? trade?.stopLoss ?? 0);
+  const takeProfit = Number(closeData?.takeProfit ?? trade?.takeProfit ?? 0);
+  const pnl = Number(closeData?.pnl ?? trade?.pnl ?? 0);
+  const width = 760;
+  const height = 320;
+  const paddingX = 48;
+  const paddingY = 32;
+  const values = [entryPrice, exitPrice].filter((value) => Number.isFinite(value));
+  if (Number.isFinite(stopLoss) && stopLoss > 0) values.push(stopLoss);
+  if (Number.isFinite(takeProfit) && takeProfit > 0) values.push(takeProfit);
+  if (!values.length || !Number.isFinite(entryPrice) || !Number.isFinite(exitPrice)) return null;
+
+  const minValue = Math.min(...values) - Math.max((Math.max(...values) - Math.min(...values)) * 0.15, 1);
+  const maxValue = Math.max(...values) + Math.max((Math.max(...values) - Math.min(...values)) * 0.15, 1);
+  const mapPrice = (value) => paddingY + ((maxValue - value) / (maxValue - minValue)) * (height - paddingY * 2);
+  const entryY = mapPrice(entryPrice);
+  const exitY = mapPrice(exitPrice);
+  const points = [
+    `${paddingX},${entryY}`,
+    `${width / 2},${exitY}`,
+    `${width - paddingX},${exitY}`,
+  ].join(" ");
+  const stopLineY = Number.isFinite(stopLoss) && stopLoss > 0 ? mapPrice(stopLoss) : null;
+  const takeLineY = Number.isFinite(takeProfit) && takeProfit > 0 ? mapPrice(takeProfit) : null;
+
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+      <rect width="100%" height="100%" rx="24" fill="#0B0D10" />
+      <rect x="20" y="20" width="${width - 40}" height="${height - 40}" rx="18" fill="#14181D" stroke="#262E38" />
+      <text x="40" y="58" fill="#ECEEF1" font-size="26" font-family="Segoe UI, Arial, sans-serif" font-weight="700">${(trade?.ticker || "TRADE").toUpperCase()}</text>
+      <text x="40" y="86" fill="#8A93A1" font-size="14" font-family="Segoe UI, Arial, sans-serif">${trade?.side === "short" ? "Short" : "Long"} • ${closeData?.exitDate || trade?.exitDate || "Closed"}</text>
+      <polyline points="${points}" fill="none" stroke="#E8A33D" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+      <circle cx="${paddingX}" cy="${entryY}" r="6" fill="#3DDC97" />
+      <circle cx="${width - paddingX}" cy="${exitY}" r="6" fill="#F0556B" />
+      ${stopLineY != null ? `<line x1="${paddingX}" y1="${stopLineY}" x2="${width - paddingX}" y2="${stopLineY}" stroke="#F0556B" stroke-dasharray="8 6" stroke-width="2" />` : ""}
+      ${takeLineY != null ? `<line x1="${paddingX}" y1="${takeLineY}" x2="${width - paddingX}" y2="${takeLineY}" stroke="#3DDC97" stroke-dasharray="8 6" stroke-width="2" />` : ""}
+      <text x="40" y="${height - 48}" fill="#ECEEF1" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="600">Entry ${entryPrice.toFixed(2)} • Exit ${exitPrice.toFixed(2)}</text>
+      <text x="40" y="${height - 20}" fill="${pnl >= 0 ? "#3DDC97" : "#F0556B"}" font-size="20" font-family="Segoe UI, Arial, sans-serif" font-weight="700">P&L ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}</text>
+    </svg>
+  `;
+
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 function seedTrades() {
@@ -716,10 +901,90 @@ function normalizeWatchlist(items) {
   return items
     .map((item) => {
       if (typeof item === "string") return { symbol: item, comment: "" };
-      if (item && typeof item === "object") return { symbol: item.symbol || item.ticker || "", comment: item.comment || "" };
+      if (item && typeof item === "object") {
+        return {
+          symbol: item.symbol || item.ticker || "",
+          comment: item.comment || "",
+          price: item.price ?? item.currentPrice ?? null,
+          logo: item.logo || "",
+          exchange: item.exchange || "",
+          currency: item.currency || "",
+          name: item.name || "",
+        };
+      }
       return null;
     })
     .filter((item) => item && item.symbol);
+}
+
+const DEFAULT_SCREENER_UNIVERSE = [
+  { symbol: "AAPL", name: "Apple", sector: "Technology", instrumentType: "stock", volume: 84_000_000, marketCap: 3.2e12, currency: "USD", exchange: "NASDAQ" },
+  { symbol: "MSFT", name: "Microsoft", sector: "Technology", instrumentType: "stock", volume: 34_000_000, marketCap: 3.0e12, currency: "USD", exchange: "NASDAQ" },
+  { symbol: "NVDA", name: "NVIDIA", sector: "Technology", instrumentType: "stock", volume: 61_000_000, marketCap: 2.9e12, currency: "USD", exchange: "NASDAQ" },
+  { symbol: "TSLA", name: "Tesla", sector: "Automotive", instrumentType: "stock", volume: 95_000_000, marketCap: 0.7e12, currency: "USD", exchange: "NASDAQ" },
+  { symbol: "AMZN", name: "Amazon", sector: "Consumer", instrumentType: "stock", volume: 39_000_000, marketCap: 1.9e12, currency: "USD", exchange: "NASDAQ" },
+  { symbol: "META", name: "Meta Platforms", sector: "Technology", instrumentType: "stock", volume: 22_000_000, marketCap: 1.3e12, currency: "USD", exchange: "NASDAQ" },
+  { symbol: "GOOGL", name: "Alphabet", sector: "Technology", instrumentType: "stock", volume: 28_000_000, marketCap: 2.1e12, currency: "USD", exchange: "NASDAQ" },
+  { symbol: "NFLX", name: "Netflix", sector: "Technology", instrumentType: "stock", volume: 13_000_000, marketCap: 0.3e12, currency: "USD", exchange: "NASDAQ" },
+  { symbol: "AMD", name: "Advanced Micro Devices", sector: "Technology", instrumentType: "stock", volume: 27_000_000, marketCap: 0.25e12, currency: "USD", exchange: "NASDAQ" },
+  { symbol: "ORCL", name: "Oracle", sector: "Technology", instrumentType: "stock", volume: 9_000_000, marketCap: 0.35e12, currency: "USD", exchange: "NASDAQ" },
+  { symbol: "JPM", name: "JPMorgan Chase", sector: "Financial", instrumentType: "stock", volume: 12_000_000, marketCap: 0.65e12, currency: "USD", exchange: "NYSE" },
+  { symbol: "BAC", name: "Bank of America", sector: "Financial", instrumentType: "stock", volume: 18_000_000, marketCap: 0.28e12, currency: "USD", exchange: "NYSE" },
+  { symbol: "XOM", name: "Exxon Mobil", sector: "Energy", instrumentType: "stock", volume: 15_000_000, marketCap: 0.45e12, currency: "USD", exchange: "NYSE" },
+  { symbol: "CVX", name: "Chevron", sector: "Energy", instrumentType: "stock", volume: 10_000_000, marketCap: 0.3e12, currency: "USD", exchange: "NYSE" },
+  { symbol: "WMT", name: "Walmart", sector: "Consumer", instrumentType: "stock", volume: 7_000_000, marketCap: 0.6e12, currency: "USD", exchange: "NYSE" },
+  { symbol: "COST", name: "Costco", sector: "Consumer", instrumentType: "stock", volume: 3_000_000, marketCap: 0.4e12, currency: "USD", exchange: "NASDAQ" },
+  { symbol: "SPY", name: "SPDR S&P 500 ETF", sector: "ETF", instrumentType: "etf", volume: 65_000_000, marketCap: 0.4e12, currency: "USD", exchange: "ARCA" },
+  { symbol: "QQQ", name: "Invesco NASDAQ 100 ETF", sector: "ETF", instrumentType: "etf", volume: 42_000_000, marketCap: 0.25e12, currency: "USD", exchange: "ARCA" },
+  { symbol: "DIA", name: "SPDR Dow Jones ETF", sector: "ETF", instrumentType: "etf", volume: 4_000_000, marketCap: 0.18e12, currency: "USD", exchange: "ARCA" },
+  { symbol: "IWM", name: "iShares Russell 2000 ETF", sector: "ETF", instrumentType: "etf", volume: 8_000_000, marketCap: 0.22e12, currency: "USD", exchange: "ARCA" },
+  { symbol: "EURUSD", name: "EUR/USD", sector: "FX", instrumentType: "forex", volume: 1_800_000_000, marketCap: null, currency: "EUR/USD", exchange: "FX" },
+  { symbol: "USDJPY", name: "USD/JPY", sector: "FX", instrumentType: "forex", volume: 1_400_000_000, marketCap: null, currency: "USD/JPY", exchange: "FX" },
+  { symbol: "BTCUSD", name: "Bitcoin", sector: "Crypto", instrumentType: "crypto", volume: 32_000_000, marketCap: 1.3e12, currency: "USD", exchange: "CRYPTO" },
+  { symbol: "ETHUSD", name: "Ethereum", sector: "Crypto", instrumentType: "crypto", volume: 19_000_000, marketCap: 0.45e12, currency: "USD", exchange: "CRYPTO" },
+  { symbol: "SOLUSD", name: "Solana", sector: "Crypto", instrumentType: "crypto", volume: 8_000_000, marketCap: 0.08e12, currency: "USD", exchange: "CRYPTO" },
+];
+
+function inferScreenerInstrumentType(symbol) {
+  const normalized = (symbol || "").toUpperCase();
+  if (/^(BTC|ETH|BNB|SOL|XRP|ADA|DOGE|TRX|AVAX|LINK|DOT|LTC|NEAR|TON|SHIB|BCH|MATIC|UNI|ATOM|ICP|APT|SUI|XMR|FIL|ARB|OP|WIF|PEPE)/.test(normalized)) return "crypto";
+  if (/^(EUR|GBP|USD|JPY|AUD|CAD|CHF|NZD|CNY|SEK|NOK|MXN|ZAR|TRY|INR|KRW)/.test(normalized) && normalized.includes("USD")) return "forex";
+  return "stock";
+}
+
+function inferScreenerSector(symbol) {
+  const normalized = (symbol || "").toUpperCase();
+  if (/^(BTC|ETH|BNB|SOL|XRP|ADA|DOGE|TRX|AVAX|LINK|DOT|LTC|NEAR|TON|SHIB|BCH|MATIC|UNI|ATOM|ICP|APT|SUI|XMR|FIL|ARB|OP|WIF|PEPE)/.test(normalized)) return "Crypto";
+  if (/^(EUR|GBP|USD|JPY|AUD|CAD|CHF|NZD|CNY|SEK|NOK|MXN|ZAR|TRY|INR|KRW)/.test(normalized) && normalized.includes("USD")) return "FX";
+  return "Custom";
+}
+
+function readSavedScreenerFilters() {
+  if (typeof window === "undefined") return [];
+  try {
+    return JSON.parse(window.localStorage.getItem("tj-screener-filters") || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function writeSavedScreenerFilters(filters) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem("tj-screener-filters", JSON.stringify(filters));
+}
+
+function readSavedScreenerAlerts() {
+  if (typeof window === "undefined") return [];
+  try {
+    return JSON.parse(window.localStorage.getItem("tj-screener-alerts") || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function writeSavedScreenerAlerts(alerts) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem("tj-screener-alerts", JSON.stringify(alerts));
 }
 
 export default function TradingJournalApp() {
@@ -787,6 +1052,60 @@ export default function TradingJournalApp() {
       return [];
     }
   });
+  const [screenerRows, setScreenerRows] = useState([]);
+  const [screenerLoading, setScreenerLoading] = useState(false);
+  const screenerDisabled = true;
+  const [screenerFilters, setScreenerFilters] = useState({
+    query: "",
+    sector: "all",
+    instrument: "all",
+    minChange: "",
+    minVolume: "",
+    minPrice: "",
+    sortBy: "changePercent",
+    sortDir: "desc",
+  });
+  const [savedScreenerFilters, setSavedScreenerFilters] = useState(() => readSavedScreenerFilters());
+  const [screenerAlerts, setScreenerAlerts] = useState(() => readSavedScreenerAlerts());
+  const [screenerFilterName, setScreenerFilterName] = useState("");
+  const [activeScreenerFilterId, setActiveScreenerFilterId] = useState("");
+  const lastManualScreenerSymbol = useRef("");
+  const screenerInitialLoadDoneRef = useRef(false);
+  const screenerSeedSymbols = useMemo(() => {
+    const query = (screenerFilters.query || "").trim().toLowerCase();
+    const sector = screenerFilters.sector === "all" ? "" : screenerFilters.sector;
+    const instrument = screenerFilters.instrument === "all" ? "" : screenerFilters.instrument;
+
+    const symbols = new Set();
+    const addSymbol = (symbol) => {
+      const normalized = (symbol || "").trim().toUpperCase();
+      if (!normalized || !/^[A-Z0-9.\-]+$/.test(normalized)) return;
+      if (query && !`${normalized} `.includes(query.toUpperCase())) return;
+      symbols.add(normalized);
+    };
+
+    DEFAULT_SCREENER_UNIVERSE.forEach((item) => {
+      if (sector && item.sector !== sector) return;
+      if (instrument && item.instrumentType !== instrument) return;
+      addSymbol(item.symbol);
+    });
+
+    watchlist.forEach((item) => {
+      const symbol = item?.symbol || item?.ticker || "";
+      if (sector && item?.sector && item.sector !== sector) return;
+      if (instrument && item?.instrumentType && item.instrumentType !== instrument) return;
+      addSymbol(symbol);
+    });
+
+    trades.forEach((trade) => {
+      const symbol = trade?.ticker || trade?.symbol || "";
+      if (sector && trade?.sector && trade.sector !== sector) return;
+      if (instrument && trade?.instrumentType && trade.instrumentType !== instrument) return;
+      addSymbol(symbol);
+    });
+
+    return Array.from(symbols).slice(0, 24);
+  }, [screenerFilters.query, screenerFilters.sector, screenerFilters.instrument, watchlist, trades]);
   const [profiles, setProfiles] = useState(() => {
     if (typeof window === "undefined") return [];
     try {
@@ -889,6 +1208,246 @@ export default function TradingJournalApp() {
   useEffect(() => {
     STORAGE.set("tj-watchlist", JSON.stringify(watchlist)).catch(() => {});
   }, [watchlist]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadScreenerRows = async () => {
+      if (screenerDisabled) {
+        if (!cancelled) {
+          setScreenerRows([]);
+          setScreenerLoading(false);
+          screenerInitialLoadDoneRef.current = true;
+        }
+        return;
+      }
+
+      const shouldShowInitialLoading = !screenerInitialLoadDoneRef.current;
+      if (shouldShowInitialLoading) {
+        setScreenerLoading(true);
+      }
+
+      const candidateSymbols = screenerSeedSymbols;
+      if (!candidateSymbols.length) {
+        if (!cancelled) {
+          setScreenerRows([]);
+          screenerInitialLoadDoneRef.current = true;
+          setScreenerLoading(false);
+        }
+        return;
+      }
+
+      const nextRows = (await Promise.allSettled(
+        candidateSymbols.map(async (symbol) => {
+          const fallback = DEFAULT_SCREENER_UNIVERSE.find((item) => item.symbol === symbol) || null;
+          try {
+            const snapshot = await fetchStockSnapshot(symbol);
+            if (!snapshot) {
+              return fallback ? { ...fallback } : { symbol, name: symbol, sector: "Custom", instrumentType: inferScreenerInstrumentType(symbol), volume: null, marketCap: null, currency: "USD", exchange: "" };
+            }
+            return {
+              ...(fallback || {}),
+              symbol,
+              name: snapshot.name || fallback?.name || symbol,
+              sector: fallback?.sector || inferScreenerSector(symbol),
+              instrumentType: fallback?.instrumentType || inferScreenerInstrumentType(symbol),
+              volume: fallback?.volume ?? null,
+              marketCap: fallback?.marketCap ?? null,
+              currency: snapshot.currency || fallback?.currency || "USD",
+              exchange: snapshot.exchange || fallback?.exchange || "",
+              price: snapshot.price ?? fallback?.price ?? null,
+              change: snapshot.change ?? null,
+              changePercent: snapshot.changePercent ?? null,
+              preMarketPrice: snapshot.preMarketPrice ?? null,
+              preMarketChange: snapshot.preMarketChange ?? null,
+              preMarketChangePercent: snapshot.preMarketChangePercent ?? null,
+              logo: snapshot.logo || fallback?.logo || "",
+            };
+          } catch {
+            return fallback ? { ...fallback } : { symbol, name: symbol, sector: "Custom", instrumentType: inferScreenerInstrumentType(symbol), volume: null, marketCap: null, currency: "USD", exchange: "" };
+          }
+        }),
+      )).map((result) => (result.status === "fulfilled" ? result.value : null)).filter(Boolean);
+
+      if (!cancelled) {
+        setScreenerRows((prev) => {
+          const merged = [...prev];
+          nextRows.forEach((row) => {
+            const key = String(row.symbol || "").toUpperCase();
+            const index = merged.findIndex((item) => String(item.symbol || "").toUpperCase() === key);
+            if (index >= 0) {
+              merged[index] = row;
+            } else {
+              merged.push(row);
+            }
+          });
+          return merged;
+        });
+      }
+      if (!cancelled) {
+        screenerInitialLoadDoneRef.current = true;
+        setScreenerLoading(false);
+      }
+    };
+
+    loadScreenerRows();
+    return () => {
+      cancelled = true;
+    };
+  }, [screenerSeedSymbols]);
+
+  useEffect(() => {
+    if (screenerDisabled) {
+      return;
+    }
+
+    const query = (screenerFilters.query || "").trim();
+    if (!query) {
+      lastManualScreenerSymbol.current = "";
+      return;
+    }
+
+    const normalizedQuery = query.toUpperCase();
+    const looksLikeTicker = /^[A-Z0-9.\-]{1,10}$/.test(normalizedQuery);
+    if (!looksLikeTicker) return;
+    if (lastManualScreenerSymbol.current === normalizedQuery) return;
+
+    lastManualScreenerSymbol.current = normalizedQuery;
+    let cancelled = false;
+    (async () => {
+      const snapshot = await fetchStockSnapshot(normalizedQuery);
+      if (cancelled) return;
+      const newRow = {
+        symbol: normalizedQuery,
+        name: snapshot?.name || normalizedQuery,
+        sector: inferScreenerSector(normalizedQuery),
+        instrumentType: inferScreenerInstrumentType(normalizedQuery),
+        volume: null,
+        marketCap: null,
+        currency: snapshot?.currency || "USD",
+        exchange: snapshot?.exchange || "",
+        price: snapshot?.price ?? null,
+        change: snapshot?.change ?? null,
+        changePercent: snapshot?.changePercent ?? null,
+        preMarketPrice: snapshot?.preMarketPrice ?? null,
+        preMarketChange: snapshot?.preMarketChange ?? null,
+        preMarketChangePercent: snapshot?.preMarketChangePercent ?? null,
+        logo: snapshot?.logo || "",
+      };
+      setScreenerRows((prev) => {
+        if (prev.some((row) => (row.symbol || "").toUpperCase() === normalizedQuery)) {
+          return prev;
+        }
+        return [newRow, ...prev];
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [screenerFilters.query]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const symbolsToLoad = new Set();
+    const needsMetadata = (item, fallbackKey) => {
+      const symbol = normalizeTicker(item?.symbol || item?.ticker || fallbackKey || "");
+      if (!symbol || !/^[A-Z0-9.\-]+$/.test(symbol)) return false;
+      return true;
+    };
+
+    watchlist.forEach((item) => {
+      const symbol = normalizeTicker(item?.symbol || "");
+      if (!symbol || !/^[A-Z0-9.\-]+$/.test(symbol)) return;
+      const hasPrice = item.price != null;
+      const hasLogo = Boolean(item.logo);
+      const hasExchange = Boolean(item.exchange);
+      if (!hasPrice || !hasLogo || !hasExchange) {
+        symbolsToLoad.add(symbol);
+      }
+    });
+
+    trades.forEach((trade) => {
+      const symbol = normalizeTicker(trade?.ticker || trade?.symbol || "");
+      if (!symbol || !/^[A-Z0-9.\-]+$/.test(symbol)) return;
+      const hasPrice = trade.status === "open" ? trade.currentPrice != null : true;
+      const hasLogo = Boolean(trade.logo);
+      const hasExchange = Boolean(trade.exchange);
+      if (trade.status === "open" && (!hasPrice || !hasLogo || !hasExchange)) {
+        symbolsToLoad.add(symbol);
+      } else if (!hasLogo || !hasExchange) {
+        symbolsToLoad.add(symbol);
+      }
+    });
+
+    if (!symbolsToLoad.size) return;
+
+    let cancelled = false;
+
+    const loadWatchlistMetadata = async () => {
+      for (const symbol of Array.from(symbolsToLoad)) {
+        if (cancelled) break;
+        try {
+          const snapshot = await fetchStockSnapshot(symbol);
+          if (!cancelled && snapshot) {
+            const payload = {
+              price: snapshot.price ?? null,
+              preMarketPrice: snapshot.preMarketPrice ?? null,
+              preMarketChange: snapshot.preMarketChange ?? null,
+              preMarketChangePercent: snapshot.preMarketChangePercent ?? null,
+              logo: snapshot.logo || "",
+              exchange: snapshot.exchange || "",
+              currency: snapshot.currency || "",
+              name: snapshot.name || "",
+              currentPrice: snapshot.price ?? null,
+            };
+
+            setWatchlist((prev) =>
+              normalizeWatchlist(prev).map((entry) =>
+                normalizeTicker(entry.symbol) === symbol ? { ...entry, ...payload } : entry,
+              ),
+            );
+
+            setTrades((prev) =>
+              prev.map((trade) => {
+                const tradeSymbol = normalizeTicker(trade?.ticker || trade?.symbol || "");
+                if (tradeSymbol !== symbol) return trade;
+                const metrics = resolveTradeMetrics({ ...trade, currentPrice: snapshot.price ?? trade.currentPrice ?? null }, snapshot);
+                return {
+                  ...trade,
+                  ...payload,
+                  currentPrice: snapshot.price ?? trade.currentPrice ?? null,
+                  ...metrics,
+                };
+              }),
+            );
+          }
+        } catch (error) {
+          if (!cancelled) {
+            setWatchlist((prev) =>
+              normalizeWatchlist(prev).map((entry) =>
+                normalizeTicker(entry.symbol) === symbol ? { ...entry, exchange: entry.exchange || "N/A" } : entry,
+              ),
+            );
+          }
+        }
+      }
+    };
+
+    loadWatchlistMetadata();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [watchlist, trades]);
+  useEffect(() => {
+    if (screenerAlerts.length) {
+      writeSavedScreenerAlerts(screenerAlerts);
+    } else {
+      writeSavedScreenerAlerts([]);
+    }
+  }, [screenerAlerts]);
+
   useEffect(() => {
     STORAGE.set("tj-profiles", JSON.stringify(profiles)).catch(() => {});
   }, [profiles]);
@@ -969,6 +1528,82 @@ export default function TradingJournalApp() {
   function updateWatchlistComment(symbol, comment) {
     setWatchlist((prev) => normalizeWatchlist(prev).map((item) => item.symbol === symbol ? { ...item, comment } : item));
   }
+
+  function saveScreenerFilter() {
+    const name = screenerFilterName.trim();
+    if (!name) return;
+    const nextFilter = {
+      id: `${Date.now()}`,
+      name,
+      values: screenerFilters,
+    };
+    const nextFilters = [nextFilter, ...savedScreenerFilters.filter((item) => item.id !== nextFilter.id)];
+    setSavedScreenerFilters(nextFilters);
+    writeSavedScreenerFilters(nextFilters);
+    setActiveScreenerFilterId(nextFilter.id);
+    setScreenerFilterName("");
+  }
+
+  function applyScreenerFilter(filter) {
+    setScreenerFilters(filter.values);
+    setActiveScreenerFilterId(filter.id);
+  }
+
+  function removeScreenerFilter(id) {
+    const nextFilters = savedScreenerFilters.filter((item) => item.id !== id);
+    setSavedScreenerFilters(nextFilters);
+    writeSavedScreenerFilters(nextFilters);
+    if (activeScreenerFilterId === id) {
+      setActiveScreenerFilterId("");
+    }
+  }
+
+  function addScreenerAlert(alert) {
+    const nextAlert = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      ...alert,
+      createdAt: Date.now(),
+    };
+    setScreenerAlerts((prev) => [nextAlert, ...prev]);
+    showToast(`${alert.symbol} alert saved`);
+
+    if (typeof window !== "undefined" && "Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
+      Notification.requestPermission().catch(() => {});
+    }
+  }
+
+  function removeScreenerAlert(id) {
+    setScreenerAlerts((prev) => prev.filter((item) => item.id !== id));
+  }
+
+  useEffect(() => {
+    if (!screenerRows.length || !screenerAlerts.length) return;
+
+    let shouldPersist = false;
+    const nextAlerts = screenerAlerts.map((alert) => {
+      if (alert.triggered) return alert;
+      const row = screenerRows.find((item) => item.symbol === alert.symbol);
+      const price = row?.price != null ? Number(row.price) : null;
+      if (price == null || Number.isNaN(price)) return alert;
+      const target = Number(alert.targetPrice);
+      if (Number.isNaN(target)) return alert;
+      const shouldFire = alert.condition === "above" ? price >= target : price <= target;
+      if (!shouldFire) return alert;
+
+      shouldPersist = true;
+      if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+        new Notification(`${alert.symbol} alert`, {
+          body: `${alert.symbol} ${alert.condition === "above" ? "is above" : "is below"} ${formatStockPrice(target, row?.currency || "USD")}`,
+        });
+      }
+      showToast(`${alert.symbol} alert triggered`);
+      return { ...alert, triggered: true, triggeredAt: Date.now() };
+    });
+
+    if (shouldPersist) {
+      setScreenerAlerts(nextAlerts);
+    }
+  }, [screenerRows, screenerAlerts]);
 
   async function addTrade(t) {
     if (saveInFlightRef.current) return;
@@ -1073,8 +1708,10 @@ export default function TradingJournalApp() {
       const trade = trades.find((item) => item.id === id);
       const merged = { ...trade, ...data };
       const { pnl, pnlPct, r } = calcPnl(merged);
+      const screenshot = data.exitScreenshot || createTradeChartScreenshot(trade, { ...data, exitPrice: data.exitPrice ?? trade?.exitPrice, pnl: pnl ?? trade?.pnl });
       const payload = {
         ...data,
+        exitScreenshot: screenshot || null,
         pnl: data.pnl !== "" && data.pnl != null ? Number(data.pnl) : (pnl != null ? +pnl.toFixed(2) : null),
         pnlPercent: data.pnlPercent !== "" && data.pnlPercent != null ? Number(data.pnlPercent) : (pnlPct != null ? +pnlPct.toFixed(2) : null),
         rMultiple: data.rMultiple !== "" && data.rMultiple != null ? Number(data.rMultiple) : (r != null ? +r.toFixed(2) : null),
@@ -1454,15 +2091,60 @@ export default function TradingJournalApp() {
                 <div className="tj-card" style={{ padding: 16, color: "var(--text-dim)", fontSize: 13 }}>{t.watchlistEmpty}</div>
               ) : watchlist.map((item) => (
                 <div key={item.symbol} className="tj-card" style={{ padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div className="tj-display" style={{ fontSize: 16, fontWeight: 700 }}>{item.symbol}</div>
-                    <input className="tj-input tj-input-compact" style={{ marginTop: 8 }} placeholder="Ticker comment" value={item.comment || ""} onChange={(event) => updateWatchlistComment(item.symbol, event.target.value)} />
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
+                    {item.logo ? (
+                      <img src={item.logo} alt={item.symbol} style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover", background: "var(--surface-2)" }} />
+                    ) : (
+                      <div style={{ width: 36, height: 36, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--surface-2)", fontSize: 12, fontWeight: 700, color: "var(--text-dim)" }}>
+                        {item.symbol.slice(0, 2)}
+                      </div>
+                    )}
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <div className="tj-display" style={{ fontSize: 16, fontWeight: 700 }}>{item.symbol}</div>
+                        {item.price != null ? (
+                          <span style={{ fontSize: 13, color: item.price < 0 ? "var(--loss)" : "var(--profit)" }}>{formatStockPrice(item.price, item.currency || "USD")}</span>
+                        ) : (
+                          <span style={{ fontSize: 12, color: "var(--text-dim)" }}>Loading…</span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 4 }}>
+                        {item.exchange ? `${item.exchange}${item.name ? ` • ${item.name}` : ""}` : (item.name ? item.name : "Finnhub data")}
+                      </div>
+                      {item.preMarketPrice != null && (
+                        <div style={{ fontSize: 12, color: "var(--accent)", marginTop: 4 }}>
+                          {t.premarketLabel}: {formatStockPrice(item.preMarketPrice, item.currency || "USD")}
+                          {item.preMarketChangePercent != null ? ` (${item.preMarketChangePercent >= 0 ? "+" : ""}${fmt2(item.preMarketChangePercent)}%)` : ""}
+                        </div>
+                      )}
+                      <input className="tj-input tj-input-compact" style={{ marginTop: 8 }} placeholder="Ticker comment" value={item.comment || ""} onChange={(event) => updateWatchlistComment(item.symbol, event.target.value)} />
+                    </div>
                   </div>
                   <button className="tj-btn-ghost" style={{ padding: "6px 10px", fontSize: 12 }} onClick={() => removeTicker(item.symbol)}>{t.watchlistRemove}</button>
                 </div>
               ))}
             </div>
           </div>
+        )}
+
+        {tab === "screener" && (
+          <ScreenerPanel
+            rows={screenerRows}
+            loading={screenerLoading}
+            filters={screenerFilters}
+            setFilters={setScreenerFilters}
+            savedFilters={savedScreenerFilters}
+            onSaveFilter={saveScreenerFilter}
+            onApplyFilter={applyScreenerFilter}
+            onRemoveFilter={removeScreenerFilter}
+            onAddAlert={addScreenerAlert}
+            onRemoveAlert={removeScreenerAlert}
+            alerts={screenerAlerts}
+            filterName={screenerFilterName}
+            setFilterName={setScreenerFilterName}
+            activeFilterId={activeScreenerFilterId}
+            t={t}
+          />
         )}
 
         <button className="tj-fab" onClick={() => setNewOpen(true)} aria-label="New trade">
@@ -1473,6 +2155,7 @@ export default function TradingJournalApp() {
           <NavItem icon={Home} label={t.dashboard} active={tab === "dashboard"} onClick={() => setTab("dashboard")} />
           <NavItem icon={BookOpen} label={t.journal} active={tab === "journal"} onClick={() => setTab("journal")} />
           <NavItem icon={Eye} label={t.watchlist} active={tab === "watchlist"} onClick={() => setTab("watchlist")} />
+          <NavItem icon={BarChart2} label={t.screener} active={tab === "screener"} onClick={() => setTab("screener")} />
           <NavItem icon={BarChart2} label={t.statistics} active={tab === "stats"} onClick={() => setTab("stats")} />
         </nav>
       </div>
@@ -1801,15 +2484,25 @@ function TradeRow({ trade, onClick, t }) {
 
   return (
     <button onClick={onClick} className="tj-card" style={{ display: "flex", width: "100%", textAlign: "left", padding: 13, marginBottom: 10, alignItems: "center", gap: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+        {trade.logo ? (
+          <img src={trade.logo} alt={trade.ticker} style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover", background: "var(--surface-2)" }} />
+        ) : (
+          <div style={{ width: 32, height: 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--surface-2)", fontSize: 11, fontWeight: 700, color: "var(--text-dim)" }}>
+            {String(trade.ticker || "?").slice(0, 2)}
+          </div>
+        )}
+      </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 5 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 5, flexWrap: "wrap" }}>
           <span className="tj-display" style={{ fontWeight: 700, fontSize: 15, color: "var(--text)" }}>{trade.ticker}</span>
           <SideBadge side={trade.side} />
           <StatusBadge status={trade.status} />
         </div>
-        <div style={{ fontSize: 11.5, color: "var(--text-faint)", display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ fontSize: 11.5, color: "var(--text-faint)", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <span>{t.inLabel} {entryStamp}</span>
           {exitStamp && <span>{t.exitLabel} {exitStamp}</span>}
+          {trade.exchange ? <span>· {trade.exchange}</span> : null}
           {trade.setup && <span>· {trade.setup}</span>}
         </div>
       </div>
@@ -1959,6 +2652,17 @@ function Journal({ trades, search, setSearch, onOpenFilter, onOpenDetail, filter
   );
 }
 
+function ScreenerPanel({ rows, loading, filters, setFilters, savedFilters, onSaveFilter, onApplyFilter, onRemoveFilter, onAddAlert, onRemoveAlert, alerts, filterName, setFilterName, activeFilterId, t }) {
+  return (
+    <div style={{ padding: "24px 16px 100px" }}>
+      <div className="tj-card" style={{ padding: 20, textAlign: "center", color: "var(--text-dim)" }}>
+        <div className="tj-display" style={{ fontSize: 20, fontWeight: 700, color: "var(--text)" }}>Незабаром</div>
+        <div style={{ marginTop: 8, fontSize: 14 }}>Скрінер тимчасово недоступний.</div>
+      </div>
+    </div>
+  );
+}
+
 function StatsScreen({ stats, trades, onOpenFilter, filtersActive, t }) {
   return (
     <div style={{ paddingBottom: 100 }}>
@@ -2013,11 +2717,23 @@ function TradeDetail({ trade, onClose, onEdit, onDelete, onDuplicate, onCloseTra
       <div className="tj-sheet tj-scroll-hide" onClick={(event) => event.stopPropagation()}>
         <SheetHeader title={`${trade.ticker}`} onClose={onClose} />
         <div style={{ padding: "0 18px 24px" }}>
-          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-            <SideBadge side={trade.side} />
-            <StatusBadge status={trade.status} />
-            {trade.setup && <span className="tj-badge" style={{ background: "var(--surface-2)", color: "var(--text-dim)" }}>{trade.setup}</span>}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+            {trade.logo ? (
+              <img src={trade.logo} alt={trade.ticker} style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover", background: "var(--surface-2)" }} />
+            ) : (
+              <div style={{ width: 40, height: 40, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--surface-2)", fontSize: 12, fontWeight: 700, color: "var(--text-dim)" }}>
+                {String(trade.ticker || "?").slice(0, 2)}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <SideBadge side={trade.side} />
+              <StatusBadge status={trade.status} />
+              {trade.setup && <span className="tj-badge" style={{ background: "var(--surface-2)", color: "var(--text-dim)" }}>{trade.setup}</span>}
+            </div>
           </div>
+          {trade.exchange ? (
+            <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginBottom: 12 }}>{trade.exchange}{trade.name ? ` • ${trade.name}` : ""}</div>
+          ) : null}
 
           <div className="tj-card" style={{ padding: 16, marginBottom: 16, textAlign: "center" }}>
             <div className="tj-label">{t.pnlLabel}</div>
@@ -2493,7 +3209,11 @@ function CloseTradeForm({ trade, onClose, onSubmit, t }) {
             )}
           </div>
 
-          <button className="tj-btn-primary" style={{ width: "100%" }} onClick={() => onSubmit(form)} disabled={!form.exitPrice}>{t.closeTrade}</button>
+          <button className="tj-btn-primary" style={{ width: "100%" }} onClick={() => {
+            const screenshot = form.exitScreenshot || createTradeChartScreenshot(trade, { ...form, exitPrice: form.exitPrice, pnl: form.pnl || 0 });
+            setValue("exitScreenshot", screenshot || null);
+            onSubmit({ ...form, exitScreenshot: screenshot || null });
+          }} disabled={!form.exitPrice}>{t.closeTrade}</button>
         </div>
       </div>
     </div>
