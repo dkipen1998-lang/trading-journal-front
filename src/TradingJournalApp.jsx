@@ -959,6 +959,27 @@ function inferScreenerSector(symbol) {
   return "Custom";
 }
 
+function inferInstrumentType(symbol, entryPrice) {
+  const normalized = (symbol || "").toUpperCase().trim();
+  const price = Number(entryPrice);
+  const cryptoPrefix = /^(BTC|ETH|BNB|SOL|XRP|ADA|DOGE|TRX|AVAX|LINK|DOT|LTC|NEAR|TON|SHIB|BCH|MATIC|UNI|ATOM|ICP|APT|SUI|XMR|FIL|ARB|OP|WIF|PEPE)/;
+  const forexPrefix = /^(EUR|GBP|USD|JPY|AUD|CAD|CHF|NZD|CNY|SEK|NOK|MXN|ZAR|TRY|INR|KRW)/;
+
+  if (cryptoPrefix.test(normalized)) return "crypto";
+  if (normalized.endsWith("USD") && !forexPrefix.test(normalized.replace(/USD$/, ""))) return "crypto";
+  if (/^[A-Z]{3,5}$/.test(normalized) && normalized.includes("USD") && normalized.length > 5) return "crypto";
+  if (forexPrefix.test(normalized) && normalized.includes("USD")) return "forex";
+
+  if (Number.isFinite(price)) {
+    if (price <= 0) return "stock";
+    if (price < 10) return "crypto";
+    if (price > 5000) return "crypto";
+    if (normalized.length > 5 && price < 1000) return "crypto";
+  }
+
+  return "stock";
+}
+
 function readSavedScreenerFilters() {
   if (typeof window === "undefined") return [];
   try {
@@ -1613,6 +1634,7 @@ export default function TradingJournalApp() {
     const riskDollar = resolveRiskValue(t.riskDollar) ?? resolveRiskValue(defaultRiskPerTrade);
     const optimisticTrade = {
       ...t,
+      instrumentType: inferInstrumentType(t.ticker, t.entryPrice),
       id: uid(),
       status: "open",
       createdAt: Date.now(),
@@ -1642,6 +1664,7 @@ export default function TradingJournalApp() {
         timeframe: t.timeframe,
         setup: t.setup,
         notes: t.notes,
+        instrumentType: inferInstrumentType(t.ticker, t.entryPrice),
         profileId: activeProfileId || undefined,
         tags: t.tags || [],
       });
@@ -1658,10 +1681,15 @@ export default function TradingJournalApp() {
     }
   }
   async function updateTradeById(id, patch) {
+    const trade = trades.find((item) => item.id === id) || {};
     const normalizedPatch = {
       ...patch,
       riskDollar: resolveRiskValue(patch.riskDollar) ?? resolveRiskValue(defaultRiskPerTrade) ?? patch.riskDollar,
     };
+    normalizedPatch.instrumentType = inferInstrumentType(
+      normalizedPatch.ticker ?? trade.ticker,
+      normalizedPatch.entryPrice ?? trade.entryPrice,
+    );
     try {
       const updated = await updateTrade(id, normalizedPatch);
       if (updated && typeof updated === "object" && updated.id) {
@@ -1708,10 +1736,9 @@ export default function TradingJournalApp() {
       const trade = trades.find((item) => item.id === id);
       const merged = { ...trade, ...data };
       const { pnl, pnlPct, r } = calcPnl(merged);
-      const screenshot = data.exitScreenshot || createTradeChartScreenshot(trade, { ...data, exitPrice: data.exitPrice ?? trade?.exitPrice, pnl: pnl ?? trade?.pnl });
       const payload = {
         ...data,
-        exitScreenshot: screenshot || null,
+        exitScreenshot: data.exitScreenshot || null,
         pnl: data.pnl !== "" && data.pnl != null ? Number(data.pnl) : (pnl != null ? +pnl.toFixed(2) : null),
         pnlPercent: data.pnlPercent !== "" && data.pnlPercent != null ? Number(data.pnlPercent) : (pnlPct != null ? +pnlPct.toFixed(2) : null),
         rMultiple: data.rMultiple !== "" && data.rMultiple != null ? Number(data.rMultiple) : (r != null ? +r.toFixed(2) : null),
@@ -2971,7 +2998,11 @@ function TradeForm({ mode, initial, setups, setSetups, tags, setTags, onClose, o
 
   function submit() {
     if (!form.ticker || !form.entryPrice) return;
-    const payload = { ...form, ticker: form.ticker.toUpperCase() };
+    const payload = {
+      ...form,
+      ticker: form.ticker.toUpperCase(),
+      instrumentType: inferInstrumentType(form.ticker, form.entryPrice),
+    };
     if ((payload.riskDollar === "" || payload.riskDollar == null) && defaultRiskPerTrade !== "") {
       payload.riskDollar = defaultRiskPerTrade;
     }
@@ -3210,9 +3241,7 @@ function CloseTradeForm({ trade, onClose, onSubmit, t }) {
           </div>
 
           <button className="tj-btn-primary" style={{ width: "100%" }} onClick={() => {
-            const screenshot = form.exitScreenshot || createTradeChartScreenshot(trade, { ...form, exitPrice: form.exitPrice, pnl: form.pnl || 0 });
-            setValue("exitScreenshot", screenshot || null);
-            onSubmit({ ...form, exitScreenshot: screenshot || null });
+            onSubmit({ ...form, exitScreenshot: form.exitScreenshot || null });
           }} disabled={!form.exitPrice}>{t.closeTrade}</button>
         </div>
       </div>
