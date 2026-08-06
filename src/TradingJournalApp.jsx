@@ -1064,15 +1064,8 @@ export default function TradingJournalApp() {
       return DEFAULT_SETUPS;
     }
   });
-  const [watchlist, setWatchlist] = useState(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const raw = window.localStorage.getItem("tj-watchlist");
-      return normalizeWatchlist(raw ? JSON.parse(raw) : []);
-    } catch {
-      return [];
-    }
-  });
+  const [watchlist, setWatchlist] = useState(() => []);
+  const prevProfileRef = useRef(activeProfileId);
   const [screenerRows, setScreenerRows] = useState([]);
   const [screenerLoading, setScreenerLoading] = useState(false);
   const screenerDisabled = true;
@@ -1192,7 +1185,8 @@ export default function TradingJournalApp() {
         const storedTrades = typeof window !== "undefined" ? window.localStorage.getItem("tj-trades") : null;
         const storedTags = typeof window !== "undefined" ? window.localStorage.getItem("tj-tags") : null;
         const storedSetups = typeof window !== "undefined" ? window.localStorage.getItem("tj-setups") : null;
-        const storedWatchlist = typeof window !== "undefined" ? window.localStorage.getItem("tj-watchlist") : null;
+        const watchKey = activeProfileId ? `tj-watchlist-${activeProfileId}` : "tj-watchlist";
+        const storedWatchlist = typeof window !== "undefined" ? window.localStorage.getItem(watchKey) : null;
 
         if (storedTrades) {
           try { setTrades(JSON.parse(storedTrades)); } catch { setTrades(seedTrades()); }
@@ -1228,8 +1222,29 @@ export default function TradingJournalApp() {
     STORAGE.set("tj-setups", JSON.stringify(setups)).catch(() => {});
   }, [setups]);
   useEffect(() => {
-    STORAGE.set("tj-watchlist", JSON.stringify(watchlist)).catch(() => {});
-  }, [watchlist]);
+    const key = activeProfileId ? `tj-watchlist-${activeProfileId}` : "tj-watchlist";
+    STORAGE.set(key, JSON.stringify(watchlist)).catch(() => {});
+  }, [watchlist, activeProfileId]);
+
+  // When switching active profile, save previous profile's watchlist and load the new one.
+  useEffect(() => {
+    const prev = prevProfileRef.current;
+    if (prev === activeProfileId) return;
+    // save previous
+    try {
+      const prevKey = prev ? `tj-watchlist-${prev}` : "tj-watchlist";
+      window.localStorage.setItem(prevKey, JSON.stringify(watchlist));
+    } catch {}
+    // load new
+    try {
+      const newKey = activeProfileId ? `tj-watchlist-${activeProfileId}` : "tj-watchlist";
+      const stored = window.localStorage.getItem(newKey);
+      if (stored) setWatchlist(normalizeWatchlist(JSON.parse(stored))); else setWatchlist([]);
+    } catch {
+      setWatchlist([]);
+    }
+    prevProfileRef.current = activeProfileId;
+  }, [activeProfileId]);
 
   useEffect(() => {
     let cancelled = false;
