@@ -1152,6 +1152,7 @@ export default function TradingJournalApp() {
   const [profileName, setProfileName] = useState("");
   const [profileRisk, setProfileRisk] = useState("");
   const [profileAccountSize, setProfileAccountSize] = useState("");
+  const [profileTickerSource, setProfileTickerSource] = useState("auto");
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [editingProfileId, setEditingProfileId] = useState("");
@@ -1261,7 +1262,7 @@ export default function TradingJournalApp() {
         candidateSymbols.map(async (symbol) => {
           const fallback = DEFAULT_SCREENER_UNIVERSE.find((item) => item.symbol === symbol) || null;
           try {
-            const snapshot = await fetchStockSnapshot(symbol);
+            const snapshot = await fetchStockSnapshot(symbol, { source: (activeProfile?.settings?.tickerDataSource || standardProfile?.settings?.tickerDataSource || 'auto') });
             if (!snapshot) {
               return fallback ? { ...fallback } : { symbol, name: symbol, sector: "Custom", instrumentType: inferScreenerInstrumentType(symbol), volume: null, marketCap: null, currency: "USD", exchange: "" };
             }
@@ -1335,7 +1336,7 @@ export default function TradingJournalApp() {
     lastManualScreenerSymbol.current = normalizedQuery;
     let cancelled = false;
     (async () => {
-      const snapshot = await fetchStockSnapshot(normalizedQuery);
+      const snapshot = await fetchStockSnapshot(normalizedQuery, { source: (activeProfile?.settings?.tickerDataSource || standardProfile?.settings?.tickerDataSource || 'auto') });
       if (cancelled) return;
       const newRow = {
         symbol: normalizedQuery,
@@ -1409,7 +1410,7 @@ export default function TradingJournalApp() {
       for (const symbol of Array.from(symbolsToLoad)) {
         if (cancelled) break;
         try {
-          const snapshot = await fetchStockSnapshot(symbol);
+          const snapshot = await fetchStockSnapshot(symbol, { source: (activeProfile?.settings?.tickerDataSource || standardProfile?.settings?.tickerDataSource || 'auto') });
           if (!cancelled && snapshot) {
             const payload = {
               price: snapshot.price ?? null,
@@ -1838,6 +1839,7 @@ export default function TradingJournalApp() {
           name,
           defaultRiskPerTrade: profileRisk ? Number(profileRisk) : undefined,
           accountSize: profileAccountSize ? Number(profileAccountSize) : undefined,
+          settings: { tickerDataSource: profileTickerSource },
         };
         setStandardProfile(nextProfile);
         setActiveProfileId("");
@@ -1851,12 +1853,14 @@ export default function TradingJournalApp() {
             name,
             defaultRiskPerTrade: profileRisk ? Number(profileRisk) : undefined,
             accountSize: profileAccountSize ? Number(profileAccountSize) : undefined,
+            settings: { tickerDataSource: profileTickerSource },
           });
         } else {
           profile = await createProfile({
             name,
             defaultRiskPerTrade: profileRisk ? Number(profileRisk) : undefined,
             accountSize: profileAccountSize ? Number(profileAccountSize) : undefined,
+            settings: { tickerDataSource: profileTickerSource },
           });
         }
         if (!profile || !profile.id) {
@@ -1886,6 +1890,7 @@ export default function TradingJournalApp() {
     setProfileName(profile.name ?? "");
     setProfileRisk(profile.defaultRiskPerTrade != null ? String(profile.defaultRiskPerTrade) : "");
     setProfileAccountSize(profile.accountSize != null ? String(profile.accountSize) : "");
+    setProfileTickerSource(profile?.settings?.tickerDataSource || "auto");
     setEditingProfileId(profile.id);
     setProfileModalOpen(true);
   }
@@ -1895,6 +1900,7 @@ export default function TradingJournalApp() {
     setProfileRisk("");
     setProfileAccountSize("");
     setEditingProfileId("");
+    setProfileTickerSource("auto");
   }
 
   async function removeProfile(id) {
@@ -2078,6 +2084,14 @@ export default function TradingJournalApp() {
                             value={profileAccountSize}
                             onChange={(event) => setProfileAccountSize(event.target.value)}
                           />
+                        </div>
+                        <div>
+                          <label className="tj-label">Ticker data source</label>
+                          <select className="tj-input tj-input-compact" value={profileTickerSource} onChange={(e) => setProfileTickerSource(e.target.value)}>
+                            <option value="auto">Auto (detect by ticker)</option>
+                            <option value="finnhub">Finnhub (stocks)</option>
+                            <option value="binance">Binance (crypto)</option>
+                          </select>
                         </div>
                       </div>
                     </div>

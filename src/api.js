@@ -114,15 +114,19 @@ async function requestBinance(path) {
   }
 }
 
-export async function fetchStockSnapshot(symbol) {
+export async function fetchStockSnapshot(symbol, options = {}) {
+  const preferredSource = options && options.source ? String(options.source) : null;
   const normalizedSymbol = (symbol || '').trim().toUpperCase();
   if (!normalizedSymbol || !/^[A-Z0-9.\-]+$/.test(normalizedSymbol)) {
     return null;
   }
 
-  const isCrypto = /^(BTC|ETH|BNB|SOL|XRP|ADA|DOGE|TRX|AVAX|LINK|DOT|LTC|NEAR|TON|SHIB|BCH|MATIC|UNI|ATOM|ICP|APT|SUI|XMR|FIL|ARB|OP|WIF|PEPE)/i.test(normalizedSymbol);
+  const cryptoPrefix = /^(BTC|ETH|BNB|SOL|XRP|ADA|DOGE|TRX|AVAX|LINK|DOT|LTC|NEAR|TON|SHIB|BCH|MATIC|UNI|ATOM|ICP|APT|SUI|XMR|FIL|ARB|OP|WIF|PEPE)/i;
 
-  if (isCrypto) {
+  const isCrypto = cryptoPrefix.test(normalizedSymbol);
+
+  // If preferredSource explicitly set, respect it (binance or finnhub). Otherwise fallback to auto-detection.
+  if (preferredSource === 'binance' || (preferredSource === null && isCrypto)) {
     const pair = normalizedSymbol.replace(/USD$/i, 'USDT');
     const quote = await requestBinance(`/ticker/24hr?symbol=${encodeURIComponent(pair)}`);
     return {
