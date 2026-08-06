@@ -1703,6 +1703,34 @@ export default function TradingJournalApp() {
       showToast(err.message || t.failedUpdateTrade);
     }
   }
+  // Ensure existing trades have correct instrumentType inferred from ticker + entryPrice.
+  useEffect(() => {
+    if (!trades || !trades.length) return;
+    (async () => {
+      const toFix = [];
+      for (const trade of trades) {
+        try {
+          const inferred = inferInstrumentType(trade.ticker, trade.entryPrice);
+          if (!trade.instrumentType || trade.instrumentType !== inferred) {
+            toFix.push({ id: trade.id, instrumentType: inferred });
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+      if (!toFix.length) return;
+      for (const item of toFix) {
+        try {
+          // reuse update flow which also updates local state
+          await updateTradeById(item.id, { instrumentType: item.instrumentType });
+        } catch (e) {
+          // ignore individual failures
+        }
+      }
+    })();
+    // run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   async function deleteTradeById(id) {
     try {
       await deleteTrade(id);
