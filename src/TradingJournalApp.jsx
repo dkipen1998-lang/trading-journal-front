@@ -1065,7 +1065,7 @@ export default function TradingJournalApp() {
     }
   });
   const [watchlist, setWatchlist] = useState(() => []);
-  const prevProfileRef = useRef(activeProfileId);
+  const prevProfileRef = useRef(null);
   const [screenerRows, setScreenerRows] = useState([]);
   const [screenerLoading, setScreenerLoading] = useState(false);
   const screenerDisabled = true;
