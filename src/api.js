@@ -238,29 +238,32 @@ export async function fetchStockSnapshot(symbol, options = {}) {
     };
   }
 
-  const [quote, profile] = await Promise.all([
+  const preferYahoo = preferredSource !== 'finnhub';
+  const [yahooQuote, finnhubQuote, profile] = await Promise.all([
+    preferYahoo ? requestYahooQuote(normalizedSymbol, preferredSource === 'forex' ? 'forex' : undefined) : null,
     requestFinnhub(`/quote?symbol=${encodeURIComponent(normalizedSymbol)}`),
     requestFinnhub(`/stock/profile2?symbol=${encodeURIComponent(normalizedSymbol)}`),
   ]);
 
-  const preMarketPrice = quote?.preMarketPrice ?? quote?.preMarket ?? quote?.preMarketStart ?? null;
-  const preMarketChange = quote?.preMarketChange ?? null;
-  const preMarketChangePercent = quote?.preMarketChangePercent ?? quote?.preMarketPercentChange ?? null;
+  const quote = yahooQuote || finnhubQuote || null;
+  const preMarketPrice = finnhubQuote?.preMarketPrice ?? finnhubQuote?.preMarket ?? finnhubQuote?.preMarketStart ?? quote?.preMarketPrice ?? null;
+  const preMarketChange = finnhubQuote?.preMarketChange ?? quote?.preMarketChange ?? null;
+  const preMarketChangePercent = finnhubQuote?.preMarketChangePercent ?? finnhubQuote?.preMarketPercentChange ?? quote?.preMarketChangePercent ?? null;
 
   return {
-    price: typeof quote?.c === 'number' ? quote.c : quote?.c ?? null,
-    change: typeof quote?.d === 'number' ? quote.d : quote?.d ?? null,
-    changePercent: typeof quote?.dp === 'number' ? quote.dp : quote?.dp ?? null,
-    volume: typeof quote?.v === 'number' ? quote.v : null,
-    averageVolume: typeof quote?.avgVolume === 'number' ? quote.avgVolume : typeof quote?.avgVolume3M === 'number' ? quote.avgVolume3M : null,
-    vwap: typeof quote?.vw === 'number' ? quote.vw : null,
+    price: quote?.price ?? (typeof finnhubQuote?.c === 'number' ? finnhubQuote.c : quote?.c ?? null),
+    change: quote?.change ?? (typeof finnhubQuote?.d === 'number' ? finnhubQuote.d : quote?.d ?? null),
+    changePercent: quote?.changePercent ?? (typeof finnhubQuote?.dp === 'number' ? finnhubQuote.dp : quote?.dp ?? null),
+    volume: quote?.volume ?? (typeof finnhubQuote?.v === 'number' ? finnhubQuote.v : null),
+    averageVolume: quote?.averageVolume ?? (typeof finnhubQuote?.avgVolume === 'number' ? finnhubQuote.avgVolume : typeof finnhubQuote?.avgVolume3M === 'number' ? finnhubQuote.avgVolume3M : null),
+    vwap: quote?.vwap ?? (typeof finnhubQuote?.vw === 'number' ? finnhubQuote.vw : null),
     preMarketPrice: preMarketPrice != null ? Number(preMarketPrice) : null,
     preMarketChange: preMarketChange != null ? Number(preMarketChange) : null,
     preMarketChangePercent: preMarketChangePercent != null ? Number(preMarketChangePercent) : null,
     logo: profile?.logo || '',
-    exchange: profile?.exchange || '',
-    currency: profile?.currency || '',
-    name: profile?.name || '',
+    exchange: profile?.exchange || quote?.exchange || '',
+    currency: profile?.currency || quote?.currency || '',
+    name: profile?.name || quote?.name || normalizedSymbol,
   };
 }
 
@@ -346,19 +349,6 @@ export async function fetchHistoricalCandles(symbol, timeframe = '1h', limit = 8
     }
   }
 
-  const resolution = mapTimeframeToFinnhubResolution(timeframe);
-  const candleData = await requestFinnhub(`/stock/candle?symbol=${encodeURIComponent(normalizedSymbol)}&resolution=${resolution}&from=${from}&to=${now}`);
-  if (candleData && candleData.s === 'ok' && Array.isArray(candleData.t)) {
-    return candleData.t.map((timestamp, index) => ({
-      time: Math.floor(Number(timestamp)),
-      open: candleData.o[index],
-      high: candleData.h[index],
-      low: candleData.l[index],
-      close: candleData.c[index],
-      volume: candleData.v[index],
-    }));
-  }
-
   const yahooRange = ({
     '1m': '1d',
     '5m': '5d',
@@ -383,6 +373,21 @@ export async function fetchHistoricalCandles(symbol, timeframe = '1h', limit = 8
   const yahooCandles = await requestYahooChart(normalizedSymbol, yahooInterval, yahooRange);
   if (Array.isArray(yahooCandles) && yahooCandles.length > 0) {
     return yahooCandles.slice(-lookback);
+  }
+
+  if (!useBinance) {
+    const resolution = mapTimeframeToFinnhubResolution(timeframe);
+    const candleData = await requestFinnhub(`/stock/candle?symbol=${encodeURIComponent(normalizedSymbol)}&resolution=${resolution}&from=${from}&to=${now}`);
+    if (candleData && candleData.s === 'ok' && Array.isArray(candleData.t)) {
+      return candleData.t.map((timestamp, index) => ({
+        time: Math.floor(Number(timestamp)),
+        open: candleData.o[index],
+        high: candleData.h[index],
+        low: candleData.l[index],
+        close: candleData.c[index],
+        volume: candleData.v[index],
+      }));
+    }
   }
 
   return null;
@@ -517,6 +522,17 @@ export async function deleteTrade(id) {
   return request(`/trades/${id}`, {
     method: 'DELETE',
   });
+}
+
+export async function fetchLatestNews() {
+  const token = getToken();
+  const shouldUseLocalFallback = !token && import.meta.env.DEV;
+  if (shouldUseLocalFallback) {
+    return [
+      { title: 'Yahoo Finance latest news unavailable offline', url: 'https://finance.yahoo.com/topic/latest-news/' },
+    ];
+  }
+  return request('/news/latest');
 }
 
 export async function duplicateTrade(id) {

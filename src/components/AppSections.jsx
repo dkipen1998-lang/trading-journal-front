@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react";
 import { createChart } from "lightweight-charts";
-import { fetchHistoricalCandles } from "../api";
+import { fetchHistoricalCandles, fetchLatestNews } from "../api";
 import {
   Plus, Search, SlidersHorizontal, Settings, X, Edit2, Trash2, Copy, Camera,
   ChevronRight, Home, BookOpen, BarChart2, Download, Eye,
@@ -97,6 +97,10 @@ const FALLBACK_LABELS = {
   export: "Export",
   newestFirst: "Newest first",
   oldestFirst: "Oldest first",
+  news: "News",
+  latestNews: "Latest news",
+  refreshNews: "Refresh",
+  noNews: "No news available.",
   noTrades: "No trades",
   journal: "Journal",
   dashboardSubtitle: "Your trading desk at a glance",
@@ -199,7 +203,9 @@ function calcPnl(trade) {
   const entry = Number(trade.entryPrice);
   const exit = Number(trade.exitPrice);
   const size = Number(trade.positionSize || 1);
-  const pnl = (exit - entry) * size;
+  const normalizedSide = `${trade.side ?? "long"}`.toLowerCase();
+  const dir = normalizedSide === "short" || normalizedSide === "sell" ? -1 : 1;
+  const pnl = (exit - entry) * size * dir;
   const pnlPct = entry ? ((exit - entry) / entry) * 100 : null;
   const riskDollar = Number(trade.riskDollar || 0);
   const r = riskDollar ? pnl / riskDollar : null;
@@ -329,14 +335,39 @@ const TradeRow = React.memo(function TradeRow({ trade, onClick, t }) {
 });
 
 export function DashboardScreen({ stats, search, setSearch, onOpenFilter, onOpenDetail, filtersActive, filtered, goJournal, incomePeriod, setIncomePeriod, periodPnlStats, t, defaultRiskPerTrade, setDefaultRiskPerTrade }) {
+  const [statsOpen, setStatsOpen] = useState(false);
   const recent = useMemo(() => filtered.slice(0, 6), [filtered]);
   const labels = t || FALLBACK_LABELS;
   return (
     <div style={{ paddingBottom: 100 }}>
-      <div style={{ padding: "18px 16px 4px" }}>
-        <div className="tj-display" style={{ fontSize: 22, fontWeight: 700 }}>{labels.journal}</div>
-        <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{labels.dashboardSubtitle}</div>
+      <div style={{ padding: "18px 16px 4px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14, flexWrap: "wrap" }}>
+        <div>
+          <div className="tj-display" style={{ fontSize: 22, fontWeight: 700 }}>{labels.journal}</div>
+          <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{labels.dashboardSubtitle}</div>
+        </div>
+        <button
+          className="tj-btn-ghost"
+          style={{
+            padding: "8px 14px",
+            fontSize: 13,
+            whiteSpace: "nowrap",
+            borderRadius: 999,
+            borderColor: "rgba(255,255,255,0.12)",
+            background: "rgba(255,255,255,0.06)",
+            color: "#fff",
+            minHeight: 38,
+            alignSelf: "flex-start",
+          }}
+          onClick={() => setStatsOpen((value) => !value)}
+        >
+          {labels.statistics} {statsOpen ? "▼" : "▶"}
+        </button>
       </div>
+      {statsOpen && (
+        <div style={{ padding: "0 16px 16px" }}>
+          <StatsScreen stats={stats} onOpenFilter={onOpenFilter} filtersActive={filtersActive} t={t} />
+        </div>
+      )}
       <div style={{ padding: "14px 16px 4px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <div className="tj-card" style={{ padding: 14, position: "relative" }}>
           <div className="stat-icon"><BarChart2 size={18} strokeWidth={1.6} /></div>
@@ -402,6 +433,10 @@ export function DashboardScreen({ stats, search, setSearch, onOpenFilter, onOpen
 export function JournalScreen({ trades, search, setSearch, onOpenFilter, onOpenDetail, filtersActive, onExport, t }) {
   const [exportOpen, setExportOpen] = useState(false);
   const [sortNewest, setSortNewest] = useState(true);
+  const [newsOpen, setNewsOpen] = useState(false);
+  const [newsLoading, setNewsLoading] = useState(false);
+  const [news, setNews] = useState([]);
+  const [newsError, setNewsError] = useState(null);
   const labels = t || FALLBACK_LABELS;
   const sortedTrades = useMemo(() => {
     return [...trades].sort((a, b) => {
@@ -418,6 +453,27 @@ export function JournalScreen({ trades, search, setSearch, onOpenFilter, onOpenD
           <button className="tj-btn-ghost" style={{ padding: "8px 10px", fontSize: 12.5 }} onClick={() => setSortNewest((value) => !value)}>
             {sortNewest ? labels.newestFirst : labels.oldestFirst}
           </button>
+          <button
+            className="tj-btn-ghost"
+            style={{ padding: "8px 10px", fontSize: 12.5 }}
+            onClick={async () => {
+              if (!newsOpen && news.length === 0 && !newsLoading) {
+                setNewsLoading(true);
+                setNewsError(null);
+                try {
+                  const latestNews = await fetchLatestNews();
+                  setNews(latestNews || []);
+                } catch (err) {
+                  setNewsError(err?.message || "Failed to load news");
+                } finally {
+                  setNewsLoading(false);
+                }
+              }
+              setNewsOpen((value) => !value);
+            }}
+          >
+            {newsOpen ? "Hide news" : "News"}
+          </button>
           <button className="tj-btn-ghost" style={{ padding: "8px 12px", display: "flex", alignItems: "center", gap: 6, fontSize: 12.5 }} onClick={() => setExportOpen((value) => !value)}>
             <Download size={14} /> {labels.export}
           </button>
@@ -431,9 +487,85 @@ export function JournalScreen({ trades, search, setSearch, onOpenFilter, onOpenD
         </div>
       )}
       <SearchBar search={search} setSearch={setSearch} onOpenFilter={onOpenFilter} filtersActive={filtersActive} t={t} />
+      {newsOpen && (
+        <div className="tj-card" style={{ margin: "12px 16px", padding: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <div style={{ fontWeight: 600 }}>{labels.latestNews || "Latest news"}</div>
+            <button className="tj-btn-ghost" style={{ padding: "6px 10px", fontSize: 12.5 }} onClick={() => setNewsOpen(false)}>
+              Close
+            </button>
+          </div>
+          {newsLoading && <div style={{ color: "var(--text-dim)" }}>Loading...</div>}
+          {newsError && <div style={{ color: "var(--loss)" }}>{newsError}</div>}
+          {!newsLoading && !newsError && news.length === 0 && <div style={{ color: "var(--text-dim)" }}>{labels.noNews || "No news available."}</div>}
+          {!newsLoading && news.length > 0 && (
+            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+              {news.map((item, index) => (
+                <li key={index} style={{ marginBottom: 10 }}>
+                  <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--link)", textDecoration: "none", fontSize: 14, fontWeight: 600 }}>
+                    {item.title}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
       <div style={{ padding: "0 16px" }}>
         {sortedTrades.length === 0 && <EmptyState text={labels.noTrades} />}
         {sortedTrades.map((trade) => <TradeRow key={trade.id} trade={trade} onClick={() => onOpenDetail(trade.id)} t={labels} />)}
+      </div>
+    </div>
+  );
+}
+
+export function NewsScreen({ t }) {
+  const [news, setNews] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const labels = t || FALLBACK_LABELS;
+
+  const loadNews = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const latestNews = await fetchLatestNews();
+      setNews(Array.isArray(latestNews) ? latestNews : []);
+    } catch (err) {
+      setError(err?.message || "Failed to load news");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadNews();
+  }, []);
+
+  return (
+    <div style={{ paddingBottom: 100 }}>
+      <div style={{ padding: "18px 16px 0", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+        <div className="tj-display" style={{ fontSize: 20, fontWeight: 700 }}>{labels.news || "News"}</div>
+        <button className="tj-btn-ghost" style={{ padding: "8px 10px", fontSize: 12.5 }} onClick={loadNews} disabled={loading}>
+          {labels.refreshNews || "Refresh"}
+        </button>
+      </div>
+      <div className="tj-card" style={{ margin: "12px 16px", padding: 14 }}>
+        {loading && <div style={{ color: "var(--text-dim)" }}>Loading...</div>}
+        {error && <div style={{ color: "var(--loss)" }}>{error}</div>}
+        {!loading && !error && news.length === 0 && <div style={{ color: "var(--text-dim)" }}>{labels.noNews || "No news available."}</div>}
+        {!loading && news.length > 0 && (
+          <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+            {news.map((item, index) => (
+              <li key={index} style={{ marginBottom: 12 }}>
+                <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--link)", textDecoration: "none", fontSize: 14, fontWeight: 600 }}>
+                  {item.title}
+                </a>
+                {item.summary ? <div style={{ marginTop: 4, fontSize: 12, color: "var(--text-dim)" }}>{item.summary}</div> : null}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );
@@ -530,9 +662,11 @@ function MiniPriceChart({ row }) {
       }
 
       let points = null;
+      const useBinance = row?.instrumentType === "crypto";
+      const primarySource = useBinance ? "binance" : "yahoo";
+
       try {
-        const source = row?.instrumentType === "crypto" ? "binance" : "auto";
-        const candles = await fetchHistoricalCandles(symbol, timeframe, 80, { source });
+        const candles = await fetchHistoricalCandles(symbol, timeframe, 80, { source: primarySource });
         if (Array.isArray(candles) && candles.length > 0) {
           points = candles.map((item) => ({
             time: typeof item.time === "string" ? item.time : Math.floor(Number(item.time) / 1000),
@@ -545,6 +679,24 @@ function MiniPriceChart({ row }) {
         }
       } catch {
         points = null;
+      }
+
+      if ((!points || !points.length) && !useBinance) {
+        try {
+          const fallbackCandles = await fetchHistoricalCandles(symbol, timeframe, 80, { source: "finnhub" });
+          if (Array.isArray(fallbackCandles) && fallbackCandles.length > 0) {
+            points = fallbackCandles.map((item) => ({
+              time: typeof item.time === "string" ? item.time : Math.floor(Number(item.time) / 1000),
+              open: Number(item.open),
+              high: Number(item.high),
+              low: Number(item.low),
+              close: Number(item.close),
+              volume: Number(item.volume),
+            }));
+          }
+        } catch {
+          points = null;
+        }
       }
 
       if (!points || !points.length) {
@@ -563,8 +715,10 @@ function MiniPriceChart({ row }) {
     };
 
     loadCandles();
+    const refreshInterval = setInterval(loadCandles, 30000);
     return () => {
       cancelled = true;
+      clearInterval(refreshInterval);
       chart.remove();
     };
   }, [row?.symbol, row?.price, row?.changePercent, row?.instrumentType, timeframe]);

@@ -2,12 +2,13 @@ import React, { useState, useEffect, useMemo, useRef, useDeferredValue } from "r
 import { loginWithTelegram, fetchTrades, fetchProfiles, createProfile, updateProfile, createTrade, updateTrade, closeTrade, deleteTrade, deleteProfile, duplicateTrade, fetchStockSnapshot, fetchTopBinanceVolumeSymbols } from "./api";
 import {
   Plus, Search, SlidersHorizontal, Settings, X, Edit2, Trash2, Copy, Camera,
-  ChevronRight, Home, BookOpen, BarChart2, Download, Eye,
+  ChevronRight, Home, BookOpen, BarChart2, Download, Eye, Rss,
   ArrowUpRight, ArrowDownRight
 } from "lucide-react";
 import {
   DashboardScreen,
   JournalScreen,
+  NewsScreen,
   ScreenerPanel,
   StatsScreen,
   TradeDetail,
@@ -41,6 +42,10 @@ const LANGUAGE_LABELS = {
     dashboard: "Панель",
     statistics: "Статистика",
     watchlist: "Список наблюдения",
+    news: "Новости",
+    latestNews: "Последние новости",
+    refreshNews: "Обновить",
+    noNews: "Новостей нет.",
     todayPnL: "Профит/убыток сегодня",
     winRate: "Win rate",
     profitFactor: "Профит фактор",
@@ -148,6 +153,10 @@ const LANGUAGE_LABELS = {
     dashboard: "Дашборд",
     statistics: "Статистика",
     watchlist: "Список спостереження",
+    news: "Новини",
+    latestNews: "Останні новини",
+    refreshNews: "Оновити",
+    noNews: "Новин немає.",
     todayPnL: "Профіт/збиток сьогодні",
     winRate: "Win rate",
     profitFactor: "Профіт фактор",
@@ -335,6 +344,10 @@ const LANGUAGE_LABELS = {
     dashboard: "Dashboard",
     statistics: "Statistics",
     watchlist: "Watchlist",
+    news: "News",
+    latestNews: "Latest news",
+    refreshNews: "Refresh",
+    noNews: "No news available.",
     todayPnL: "Today P&L",
     winRate: "Win rate",
     profitFactor: "Profit factor",
@@ -801,7 +814,8 @@ function resolveTradeMetrics(trade) {
 
 function calcPnl(t) {
   if (t.exitPrice == null || t.exitPrice === "" || !t.entryPrice || !t.positionSize) return { pnl: null, pnlPct: null, r: null };
-  const dir = t.side === "long" ? 1 : -1;
+  const normalizedSide = `${t.side ?? "long"}`.toLowerCase();
+  const dir = normalizedSide === "short" || normalizedSide === "sell" ? -1 : 1;
   const pnl = (Number(t.exitPrice) - Number(t.entryPrice)) * Number(t.positionSize) * dir;
   const cost = Number(t.entryPrice) * Number(t.positionSize);
   const pnlPct = cost ? (pnl / cost) * 100 : 0;
@@ -2340,7 +2354,7 @@ export default function TradingJournalApp() {
             t={t}
           />
         )}
-        {tab === "stats" && <StatsScreen stats={stats} onOpenFilter={() => setFilterOpen(true)} filtersActive={Object.values(filters).some((value) => value !== "all")} t={t} />}
+        {tab === "news" && <NewsScreen t={t} />}
         {tab === "watchlist" && (
           <div style={{ padding: 18 }}>
             <div className="tj-display" style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{t.watchlistTitle}</div>
@@ -2426,9 +2440,9 @@ export default function TradingJournalApp() {
         <nav className="tj-navbar">
           <NavItem icon={Home} label={t.dashboard} active={tab === "dashboard"} onClick={() => setTab("dashboard")} />
           <NavItem icon={BookOpen} label={t.journal} active={tab === "journal"} onClick={() => setTab("journal")} />
+          <NavItem icon={Rss} label={t.news} active={tab === "news"} onClick={() => setTab("news")} />
           <NavItem icon={Eye} label={t.watchlist} active={tab === "watchlist"} onClick={() => setTab("watchlist")} />
           <NavItem icon={BarChart2} label={t.screener} active={tab === "screener"} onClick={() => setTab("screener")} />
-          <NavItem icon={BarChart2} label={t.statistics} active={tab === "stats"} onClick={() => setTab("stats")} />
         </nav>
       </div>
 
