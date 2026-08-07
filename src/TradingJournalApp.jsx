@@ -701,7 +701,10 @@ const STYLE = `
   z-index: 50; display: flex; align-items: flex-end; justify-content: center;
 }
 .tj-sheet {
-  background: var(--bg);
+  /* sheet should contrast with the page background so its contents are visible
+     use surface color and ensure text color is applied (fixes blank/black sheet) */
+  background: var(--surface);
+  color: var(--text);
   width: 100%; max-width: 420px;
   border-radius: 20px 20px 0 0;
   max-height: 92vh;
@@ -1017,6 +1020,73 @@ function inferInstrumentType(symbol, entryPrice) {
   }
 
   return "stock";
+}
+
+// --- CoinGecko icon helper -------------------------------------------------
+async function fetchCoinListIfNeeded() {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem('tj-coinmap-cache');
+    const now = Date.now();
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed.timestamp && (now - parsed.timestamp) < 1000 * 60 * 60 * 24 * 7 && parsed.map) {
+        return parsed.map;
+      }
+    }
+    const resp = await fetch('https://api.coingecko.com/api/v3/coins/list');
+    if (!resp.ok) return {};
+    const list = await resp.json();
+    const map = {};
+    for (const item of list) {
+      if (!item || !item.symbol || !item.id) continue;
+      const key = item.symbol.trim().toLowerCase();
+      if (!map[key]) map[key] = item.id;
+    }
+    try { window.localStorage.setItem('tj-coinmap-cache', JSON.stringify({ timestamp: now, map })); } catch (e) {}
+    return map;
+  } catch (e) {
+    return {};
+  }
+}
+
+async function getCoinGeckoIcon(symbol) {
+  if (typeof window === 'undefined') return null;
+  try {
+    // check cached icons to avoid repeated CoinGecko hits
+    try {
+      const rawCache = window.localStorage.getItem('tj-coinicon-cache');
+      if (rawCache) {
+        const parsed = JSON.parse(rawCache);
+        const cached = parsed[(symbol || '').toUpperCase()];
+        if (cached) return cached;
+      }
+    } catch (e) {}
+    const normalized = (symbol || '').toUpperCase().replace(/\s+/g, '');
+    let base = normalized;
+    if (base.endsWith('USDT')) base = base.slice(0, -4);
+    else if (base.endsWith('USD')) base = base.slice(0, -3);
+    // map some common aliases
+    const alias = base.replace(/[-_.].*$/, '');
+
+    const map = await fetchCoinListIfNeeded();
+    const id = map[(alias || '').toLowerCase()] || map[(base || '').toLowerCase()];
+    if (!id) return null;
+    // fetch coin details
+    const resp = await fetch(`https://api.coingecko.com/api/v3/coins/${encodeURIComponent(id)}?localization=false&tickers=false&market_data=false&community_data=false&developer_data=false&sparkline=false`);
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    const url = json?.image?.small || json?.image?.thumb || json?.image?.large || null;
+    try {
+      const rawCache = window.localStorage.getItem('tj-coinicon-cache');
+      const parsed = rawCache ? JSON.parse(rawCache) : {};
+      parsed[(symbol || '').toUpperCase()] = url;
+      window.localStorage.setItem('tj-coinicon-cache', JSON.stringify(parsed));
+    } catch (e) {}
+    return url;
+  } catch (e) {
+    return null;
+  }
 }
 
 function readSavedScreenerFilters() {
@@ -1421,6 +1491,8 @@ export default function TradingJournalApp() {
             const vwap = snapshot.vwap ?? null;
             const volume = snapshot.volume ?? fallback?.volume ?? null;
             const averageVolume = snapshot.averageVolume ?? null;
+            const logo = snapshot.logo || fallback?.logo || "";
+
             return {
               ...(fallback || {}),
               symbol: formattedSymbol,
@@ -1441,7 +1513,7 @@ export default function TradingJournalApp() {
               preMarketPrice: snapshot.preMarketPrice ?? null,
               preMarketChange: snapshot.preMarketChange ?? null,
               preMarketChangePercent: snapshot.preMarketChangePercent ?? null,
-              logo: snapshot.logo || fallback?.logo || "",
+              logo,
             };
           } catch {
             return fallback ? { ...fallback } : { symbol, name: symbol, sector: "Custom", instrumentType: inferScreenerInstrumentType(symbol), volume: null, marketCap: null, currency: "USD", exchange: "" };
@@ -1587,12 +1659,26 @@ export default function TradingJournalApp() {
         try {
           const snapshot = await fetchStockSnapshot(symbol, { source });
           if (!cancelled && snapshot) {
+            let logo = snapshot.logo || "";
+            // try to fetch a CoinGecko icon for crypto symbols when snapshot has no logo
+            try {
+              if (!logo) {
+                const inferred = inferInstrumentType(symbol);
+                if (inferred === 'crypto') {
+                  const icon = await getCoinGeckoIcon(symbol);
+                  if (icon) logo = icon;
+                }
+              }
+            } catch (e) {
+              // ignore icon fetch failures
+            }
+
             const payload = {
               price: snapshot.price ?? null,
               preMarketPrice: snapshot.preMarketPrice ?? null,
               preMarketChange: snapshot.preMarketChange ?? null,
               preMarketChangePercent: snapshot.preMarketChangePercent ?? null,
-              logo: snapshot.logo || "",
+              logo: logo || "",
               exchange: snapshot.exchange || "",
               currency: snapshot.currency || "",
               name: snapshot.name || "",

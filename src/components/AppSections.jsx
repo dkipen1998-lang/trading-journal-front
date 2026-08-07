@@ -896,6 +896,15 @@ export function SheetHeader({ title, onClose }) {
   );
 }
 
+export function Field({ label, value }) {
+  return (
+    <div>
+      <div className="tj-label">{label}</div>
+      <div style={{ fontSize: 14, color: "var(--text)", minHeight: 20 }}>{value != null && value !== "" ? String(value) : "—"}</div>
+    </div>
+  );
+}
+
 export function TradeForm({ mode, initial, setups, setSetups, tags, setTags, onClose, onSubmit, t, isSubmitting = false, defaultRiskPerTrade = "" }) {
   const [form, setForm] = useState(() => ({
     ...(initial || { ticker: "", side: "long", entryDate: todayISO(), entryTime: nowTime(), entryPrice: "", stopLoss: "", takeProfit: "", positionSize: "", riskDollar: "", riskPercent: "", setup: "", tags: [], notes: "", entryScreenshot: null }),
