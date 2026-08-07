@@ -557,11 +557,20 @@ export function NewsScreen({ t }) {
         {!loading && news.length > 0 && (
           <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
             {news.map((item, index) => (
-              <li key={index} style={{ marginBottom: 12 }}>
-                <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--link)", textDecoration: "none", fontSize: 14, fontWeight: 600 }}>
-                  {item.title}
-                </a>
-                {item.summary ? <div style={{ marginTop: 4, fontSize: 12, color: "var(--text-dim)" }}>{item.summary}</div> : null}
+              <li key={index} style={{ marginBottom: 14 }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
+                  <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--link)", textDecoration: "none", fontSize: 14, fontWeight: 600, flex: 1 }}>
+                    {item.title}
+                  </a>
+                  {item.source ? (
+                    <span style={{ color: "var(--text-faint)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 2 }}>
+                      {item.source}
+                    </span>
+                  ) : null}
+                </div>
+                {item.ticker ? <div style={{ marginTop: 6, fontSize: 12, color: "var(--text-faint)" }}>Ticker: {item.ticker}</div> : null}
+                {item.summary ? <div style={{ marginTop: 6, fontSize: 12, color: "var(--text-dim)" }}>{item.summary}</div> : null}
+                {item.publishedAt ? <div style={{ marginTop: 6, fontSize: 11, color: "var(--text-faint)" }}>{new Date(item.publishedAt).toLocaleString()}</div> : null}
               </li>
             ))}
           </ul>
