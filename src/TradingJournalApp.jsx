@@ -757,8 +757,16 @@ const formatStockPrice = (value, currency = "USD") => {
   }
 };
 const normalizeTicker = (value) => (value || "").trim().toUpperCase();
-function resolveTradeMetrics(trade, snapshot) {
-  if (!trade || trade.status !== "open") {
+function resolveTradeMetrics(trade) {
+  if (!trade) {
+    return {
+      pnl: null,
+      pnlPercent: null,
+      rMultiple: null,
+    };
+  }
+
+  if (trade.status !== "open") {
     return {
       pnl: trade?.pnl ?? null,
       pnlPercent: trade?.pnlPercent ?? null,
@@ -766,20 +774,10 @@ function resolveTradeMetrics(trade, snapshot) {
     };
   }
 
-  const currentPrice = snapshot?.price ?? trade?.currentPrice ?? null;
-  if (currentPrice == null || trade.entryPrice == null || trade.positionSize == null || trade.positionSize === "") {
-    return {
-      pnl: trade?.pnl ?? null,
-      pnlPercent: trade?.pnlPercent ?? null,
-      rMultiple: trade?.rMultiple ?? null,
-    };
-  }
-
-  const { pnl, pnlPct, r } = calcPnl({ ...trade, exitPrice: currentPrice });
   return {
-    pnl: pnl != null ? +pnl.toFixed(2) : null,
-    pnlPercent: pnlPct != null ? +pnlPct.toFixed(2) : null,
-    rMultiple: r != null ? +r.toFixed(2) : null,
+    pnl: null,
+    pnlPercent: null,
+    rMultiple: null,
   };
 }
 
@@ -1015,14 +1013,26 @@ function writeSavedScreenerAlerts(alerts) {
 }
 
 function getWatchlistStorageKey(profileId) {
-  return profileId ? `tj-watchlist-${profileId}` : "tj-watchlist";
+  const normalizedProfileId = profileId || STANDARD_PROFILE_ID;
+  return `tj-watchlist-${normalizedProfileId}`;
 }
 
 function loadWatchlistForProfile(profileId) {
   if (typeof window === "undefined") return [];
+  const storageKey = getWatchlistStorageKey(profileId);
   try {
-    const raw = window.localStorage.getItem(getWatchlistStorageKey(profileId));
-    return raw ? normalizeWatchlist(JSON.parse(raw)) : [];
+    const raw = window.localStorage.getItem(storageKey);
+    if (raw != null) {
+      return normalizeWatchlist(JSON.parse(raw));
+    }
+
+    if (!profileId || profileId === STANDARD_PROFILE_ID) {
+      const legacyRaw = window.localStorage.getItem("tj-watchlist");
+      if (legacyRaw != null) {
+        return normalizeWatchlist(JSON.parse(legacyRaw));
+      }
+    }
+    return [];
   } catch {
     return [];
   }
@@ -1030,7 +1040,12 @@ function loadWatchlistForProfile(profileId) {
 
 function saveWatchlistForProfile(profileId, items) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(getWatchlistStorageKey(profileId), JSON.stringify(normalizeWatchlist(items)));
+  const storageKey = getWatchlistStorageKey(profileId);
+  window.localStorage.setItem(storageKey, JSON.stringify(normalizeWatchlist(items)));
+
+  if (!profileId || profileId === STANDARD_PROFILE_ID) {
+    window.localStorage.removeItem("tj-watchlist");
+  }
 }
 
 function clearLegacyWatchlistStorage() {
@@ -1111,11 +1126,12 @@ export default function TradingJournalApp() {
   const prevProfileRef = useRef(null);
   const watchlistRef = useRef([]);
   const activeProfileIdRef = useRef("");
+  const profileSwitchInFlightRef = useRef(false);
   const watchlistMetadataInFlightRef = useRef(new Set());
   const watchlistMetadataLoadedRef = useRef(new Set());
   const [screenerRows, setScreenerRows] = useState([]);
   const [screenerLoading, setScreenerLoading] = useState(false);
-  const screenerDisabled = true;
+  const screenerDisabled = false;
   const [screenerFilters, setScreenerFilters] = useState({
     query: "",
     sector: "all",
@@ -1278,6 +1294,7 @@ export default function TradingJournalApp() {
   }, [watchlist]);
 
   useEffect(() => {
+    if (profileSwitchInFlightRef.current) return;
     saveWatchlistForProfile(activeProfileId, watchlist);
   }, [watchlist, activeProfileId]);
 
@@ -1286,6 +1303,7 @@ export default function TradingJournalApp() {
     const prev = prevProfileRef.current;
     if (prev === activeProfileId) return;
 
+    profileSwitchInFlightRef.current = true;
     if (prev !== null && prev !== undefined) {
       saveWatchlistForProfile(prev, watchlistRef.current);
     }
@@ -1294,6 +1312,12 @@ export default function TradingJournalApp() {
     setWatchlist(nextWatchlist);
     watchlistRef.current = nextWatchlist;
     prevProfileRef.current = activeProfileId;
+
+    const timeoutId = setTimeout(() => {
+      profileSwitchInFlightRef.current = false;
+    }, 0);
+
+    return () => clearTimeout(timeoutId);
   }, [activeProfileId]);
 
   useEffect(() => {
@@ -1493,17 +1517,19 @@ export default function TradingJournalApp() {
               currentPrice: snapshot.price ?? null,
             };
 
-            setWatchlist((prev) =>
-              normalizeWatchlist(prev).map((entry) =>
+            setWatchlist((prev) => {
+              const next = normalizeWatchlist(prev).map((entry) =>
                 normalizeTicker(entry.symbol) === symbol ? { ...entry, ...payload } : entry,
-              ),
-            );
+              );
+              saveWatchlistForProfile(activeProfileIdRef.current, next);
+              return next;
+            });
 
             setTrades((prev) =>
               prev.map((trade) => {
                 const tradeSymbol = normalizeTicker(trade?.ticker || trade?.symbol || "");
                 if (tradeSymbol !== symbol) return trade;
-                const metrics = resolveTradeMetrics({ ...trade, currentPrice: snapshot.price ?? trade.currentPrice ?? null }, snapshot);
+                const metrics = resolveTradeMetrics({ ...trade, currentPrice: snapshot.price ?? trade.currentPrice ?? null });
                 return {
                   ...trade,
                   ...payload,
@@ -1515,11 +1541,13 @@ export default function TradingJournalApp() {
           }
         } catch {
           if (!cancelled) {
-            setWatchlist((prev) =>
-              normalizeWatchlist(prev).map((entry) =>
+            setWatchlist((prev) => {
+              const next = normalizeWatchlist(prev).map((entry) =>
                 normalizeTicker(entry.symbol) === symbol ? { ...entry, exchange: entry.exchange || "N/A" } : entry,
-              ),
-            );
+              );
+              saveWatchlistForProfile(activeProfileIdRef.current, next);
+              return next;
+            });
           }
         } finally {
           if (!cancelled) {

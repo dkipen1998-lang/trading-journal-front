@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react";
+import { createChart } from "lightweight-charts";
 import {
   Plus, Search, SlidersHorizontal, Settings, X, Edit2, Trash2, Copy, Camera,
   ChevronRight, Home, BookOpen, BarChart2, Download, Eye,
@@ -415,13 +416,195 @@ export function JournalScreen({ trades, search, setSearch, onOpenFilter, onOpenD
   );
 }
 
+function MiniPriceChart({ row }) {
+  const containerRef = useRef(null);
+  const [timeframe, setTimeframe] = useState("1h");
+  const [lastVolume, setLastVolume] = useState(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const chart = createChart(containerRef.current, {
+      width: 260,
+      height: 140,
+      layout: {
+        background: { color: "transparent" },
+        textColor: "#ECEEF1",
+      },
+      grid: {
+        vertLines: { color: "rgba(255,255,255,0.04)" },
+        horzLines: { color: "rgba(255,255,255,0.04)" },
+      },
+      timeScale: { timeVisible: true, secondsVisible: false },
+      rightPriceScale: { borderVisible: false },
+      leftPriceScale: { visible: false },
+      crosshair: { mode: 0 },
+      handleScroll: true,
+      handleScale: true,
+    });
+
+    const series = chart.addCandlestickSeries({
+      upColor: "#3DDC97",
+      downColor: "#F0556B",
+      borderVisible: false,
+      wickUpColor: "#3DDC97",
+      wickDownColor: "#F0556B",
+      priceScaleId: "right",
+    });
+
+    const volumeSeries = chart.addHistogramSeries({
+      color: "rgba(94, 200, 216, 0.5)",
+      priceScaleId: "right",
+    });
+
+    const basePrice = Number(row?.price ?? 100);
+    const drift = Number(row?.changePercent ?? 0) / 100;
+    const seed = (row?.symbol || "AAPL").split("").reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+    const timeframes = {
+      "1m": 60_000,
+      "5m": 300_000,
+      "15m": 900_000,
+      "1h": 3_600_000,
+      "4h": 14_400_000,
+      "1d": 86_400_000,
+      "1w": 604_800_000,
+      "1M": 2_629_746_000,
+    };
+    const interval = timeframes[timeframe] || timeframes["1h"];
+    const points = Array.from({ length: 42 }, (_, index) => {
+      const time = Math.floor((Date.now() - (41 - index) * interval) / 1000);
+      const trend = (index / 41 - 0.5) * 0.08 + drift * 0.04;
+      const wave = Math.sin((index + seed) / 3.2) * 0.012;
+      const open = basePrice * (1 + trend + wave);
+      const close = open * (1 + Math.sin((index + seed) / 5.4) * 0.014 + drift * 0.01);
+      const high = Math.max(open, close) * (1 + Math.abs(Math.cos((index + seed) / 4.6)) * 0.008 + 0.004);
+      const low = Math.min(open, close) * (1 - Math.abs(Math.sin((index + seed) / 4.2)) * 0.008 - 0.004);
+      const volume = Math.round((900000 + (index % 7) * 180000 + Math.abs(Math.sin((index + seed) / 3)) * 650000) * (1 + Math.max(0, drift) * 1.2));
+      return { time, open, high, low, close, volume };
+    });
+
+    const volumeData = points.map((point) => ({ time: point.time, value: point.volume }));
+    series.setData(points);
+    volumeSeries.setData(volumeData);
+    chart.timeScale().fitContent();
+    setLastVolume(points[points.length - 1]?.volume ?? null);
+
+    return () => chart.remove();
+  }, [row?.symbol, row?.price, row?.changePercent, timeframe]);
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+        {Object.keys({ "1m": 1, "5m": 1, "15m": 1, "1h": 1, "4h": 1, "1d": 1, "1w": 1, "1M": 1 }).map((value) => (
+          <button
+            key={value}
+            className={cls("tj-chip", timeframe === value && "on")}
+            style={{ fontSize: 11, padding: "4px 8px" }}
+            onClick={() => setTimeframe(value)}
+          >
+            {value}
+          </button>
+        ))}
+      </div>
+      <div ref={containerRef} style={{ width: "100%", height: 140, minWidth: 150 }} />
+      {lastVolume != null && <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>Vol: {Math.round(lastVolume / 1000)}k</div>}
+    </div>
+  );
+}
+
 export function ScreenerPanel({ rows, loading, filters, setFilters, savedFilters, onSaveFilter, onApplyFilter, onRemoveFilter, onAddAlert, onRemoveAlert, alerts, filterName, setFilterName, activeFilterId, t }) {
+  const labels = t || FALLBACK_LABELS;
+  const sectorOptions = ["all", "Technology", "Financial", "Energy", "Consumer", "ETF", "FX", "Crypto", "Automotive", "Custom"];
+  const instrumentOptions = ["all", "stock", "etf", "forex", "crypto"];
+
   return (
     <div style={{ padding: "24px 16px 100px" }}>
-      <div className="tj-card" style={{ padding: 20, textAlign: "center", color: "var(--text-dim)" }}>
-        <div className="tj-display" style={{ fontSize: 20, fontWeight: 700, color: "var(--text)" }}>Coming soon</div>
-        <div style={{ marginTop: 8, fontSize: 14 }}>The screener is temporarily unavailable.</div>
+      <div className="tj-card" style={{ padding: 16, marginBottom: 12 }}>
+        <div className="tj-display" style={{ fontSize: 20, fontWeight: 700, color: "var(--text)" }}>{labels.screenerTitle || "Market Screener"}</div>
+        <div style={{ marginTop: 6, fontSize: 13, color: "var(--text-dim)" }}>{labels.screenerSubtitle || "Explore instruments with a lightweight chart view."}</div>
       </div>
+
+      <div className="tj-card" style={{ padding: 14, marginBottom: 12 }}>
+        <div style={{ display: "grid", gap: 8 }}>
+          <input
+            className="tj-input tj-input-compact"
+            placeholder={labels.screenerSearchPlaceholder || "Search symbol or sector"}
+            value={filters?.query || ""}
+            onChange={(event) => setFilters((prev) => ({ ...prev, query: event.target.value }))}
+          />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <select className="tj-input tj-input-compact" value={filters?.sector || "all"} onChange={(event) => setFilters((prev) => ({ ...prev, sector: event.target.value }))}>
+              {sectorOptions.map((option) => <option key={option} value={option}>{option === "all" ? labels.screenerAllSectors || "All sectors" : option}</option>)}
+            </select>
+            <select className="tj-input tj-input-compact" value={filters?.instrument || "all"} onChange={(event) => setFilters((prev) => ({ ...prev, instrument: event.target.value }))}>
+              {instrumentOptions.map((option) => <option key={option} value={option}>{option === "all" ? labels.screenerAllInstruments || "All instruments" : option}</option>)}
+            </select>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+            <input className="tj-input tj-input-compact" placeholder={labels.screenerMinChange || "Min % change"} value={filters?.minChange || ""} onChange={(event) => setFilters((prev) => ({ ...prev, minChange: event.target.value }))} />
+            <input className="tj-input tj-input-compact" placeholder={labels.screenerMinVolume || "Min volume"} value={filters?.minVolume || ""} onChange={(event) => setFilters((prev) => ({ ...prev, minVolume: event.target.value }))} />
+            <input className="tj-input tj-input-compact" placeholder={labels.screenerMinPrice || "Min price"} value={filters?.minPrice || ""} onChange={(event) => setFilters((prev) => ({ ...prev, minPrice: event.target.value }))} />
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+        <button className="tj-btn-ghost" style={{ padding: "8px 10px" }} onClick={() => setFilters((prev) => ({ ...prev, sortBy: prev.sortBy === "changePercent" ? "price" : "changePercent", sortDir: prev.sortDir === "desc" ? "asc" : "desc" }))}>
+          {labels.screenerSortGrowth || "Sort"}
+        </button>
+        <input className="tj-input tj-input-compact" style={{ maxWidth: 170 }} placeholder={labels.screenerFilterName || "Filter name"} value={filterName || ""} onChange={(event) => setFilterName(event.target.value)} />
+        <button className="tj-btn-primary" style={{ padding: "8px 12px" }} onClick={() => onSaveFilter && onSaveFilter()}>{labels.screenerSaveFilter || "Save"}</button>
+      </div>
+
+      {savedFilters?.length > 0 && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+          {savedFilters.map((filter) => (
+            <div key={filter.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <button className={cls("tj-chip", activeFilterId === filter.id && "on")} onClick={() => onApplyFilter(filter)}>{filter.name}</button>
+              <button className="tj-btn-ghost" style={{ padding: "4px 8px", fontSize: 12 }} onClick={() => onRemoveFilter(filter.id)}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="tj-card" style={{ padding: 20, textAlign: "center", color: "var(--text-dim)" }}>{labels.screenerLoading || "Loading screener…"}</div>
+      ) : rows?.length === 0 ? (
+        <div className="tj-card" style={{ padding: 20, textAlign: "center", color: "var(--text-dim)" }}>{labels.screenerAlertEmpty || "No instruments match the current filters."}</div>
+      ) : (
+        <div style={{ display: "grid", gap: 10 }}>
+          {rows.map((row) => {
+            const change = Number(row?.changePercent ?? row?.change ?? 0);
+            const price = Number(row?.price ?? 0);
+            return (
+              <div key={row.symbol} className="tj-card" style={{ padding: 14 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                  <div>
+                    <div className="tj-display" style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{row.symbol}</div>
+                    <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{row.name || row.symbol}</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div className="tj-mono" style={{ fontSize: 14, fontWeight: 600 }}>{price ? `$${price.toFixed(2)}` : "—"}</div>
+                    <div style={{ fontSize: 12, color: change >= 0 ? "var(--profit)" : "var(--loss)" }}>{change >= 0 ? "+" : ""}{change.toFixed(2)}%</div>
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginTop: 10, fontSize: 12, color: "var(--text-dim)" }}>
+                  <div className="tj-card" style={{ padding: 8 }}><div style={{ fontSize: 10, textTransform: "uppercase" }}>{labels.screenerVol || "Volume"}</div><div className="tj-mono" style={{ marginTop: 4 }}>{row.volume ? row.volume.toLocaleString() : "—"}</div></div>
+                  <div className="tj-card" style={{ padding: 8 }}><div style={{ fontSize: 10, textTransform: "uppercase" }}>Sector</div><div className="tj-mono" style={{ marginTop: 4 }}>{row.sector || "—"}</div></div>
+                  <div className="tj-card" style={{ padding: 8 }}><div style={{ fontSize: 10, textTransform: "uppercase" }}>{labels.screenerAlert || "Alert"}</div><div className="tj-mono" style={{ marginTop: 4 }}>{row.exchange || "—"}</div></div>
+                </div>
+                <div style={{ marginTop: 10 }}>
+                  <MiniPriceChart row={row} />
+                </div>
+                <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                  <button className="tj-btn-ghost" style={{ padding: "7px 10px", fontSize: 12 }} onClick={() => onAddAlert && onAddAlert({ symbol: row.symbol, targetPrice: price, condition: "above" })}>{labels.screenerAlert || "Alert"}</button>
+                  <button className="tj-btn-ghost" style={{ padding: "7px 10px", fontSize: 12 }} onClick={() => onRemoveAlert && onRemoveAlert(row.symbol)}>{labels.watchlistRemove || "Remove"}</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
