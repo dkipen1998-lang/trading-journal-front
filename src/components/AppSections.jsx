@@ -433,10 +433,6 @@ export function DashboardScreen({ stats, search, setSearch, onOpenFilter, onOpen
 export function JournalScreen({ trades, search, setSearch, onOpenFilter, onOpenDetail, filtersActive, onExport, t }) {
   const [exportOpen, setExportOpen] = useState(false);
   const [sortNewest, setSortNewest] = useState(true);
-  const [newsOpen, setNewsOpen] = useState(false);
-  const [newsLoading, setNewsLoading] = useState(false);
-  const [news, setNews] = useState([]);
-  const [newsError, setNewsError] = useState(null);
   const labels = t || FALLBACK_LABELS;
   const sortedTrades = useMemo(() => {
     return [...trades].sort((a, b) => {
@@ -453,27 +449,6 @@ export function JournalScreen({ trades, search, setSearch, onOpenFilter, onOpenD
           <button className="tj-btn-ghost" style={{ padding: "8px 10px", fontSize: 12.5 }} onClick={() => setSortNewest((value) => !value)}>
             {sortNewest ? labels.newestFirst : labels.oldestFirst}
           </button>
-          <button
-            className="tj-btn-ghost"
-            style={{ padding: "8px 10px", fontSize: 12.5 }}
-            onClick={async () => {
-              if (!newsOpen && news.length === 0 && !newsLoading) {
-                setNewsLoading(true);
-                setNewsError(null);
-                try {
-                  const latestNews = await fetchLatestNews();
-                  setNews(latestNews || []);
-                } catch (err) {
-                  setNewsError(err?.message || "Failed to load news");
-                } finally {
-                  setNewsLoading(false);
-                }
-              }
-              setNewsOpen((value) => !value);
-            }}
-          >
-            {newsOpen ? "Hide news" : "News"}
-          </button>
           <button className="tj-btn-ghost" style={{ padding: "8px 12px", display: "flex", alignItems: "center", gap: 6, fontSize: 12.5 }} onClick={() => setExportOpen((value) => !value)}>
             <Download size={14} /> {labels.export}
           </button>
@@ -487,30 +462,6 @@ export function JournalScreen({ trades, search, setSearch, onOpenFilter, onOpenD
         </div>
       )}
       <SearchBar search={search} setSearch={setSearch} onOpenFilter={onOpenFilter} filtersActive={filtersActive} t={t} />
-      {newsOpen && (
-        <div className="tj-card" style={{ margin: "12px 16px", padding: 14 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <div style={{ fontWeight: 600 }}>{labels.latestNews || "Latest news"}</div>
-            <button className="tj-btn-ghost" style={{ padding: "6px 10px", fontSize: 12.5 }} onClick={() => setNewsOpen(false)}>
-              Close
-            </button>
-          </div>
-          {newsLoading && <div style={{ color: "var(--text-dim)" }}>Loading...</div>}
-          {newsError && <div style={{ color: "var(--loss)" }}>{newsError}</div>}
-          {!newsLoading && !newsError && news.length === 0 && <div style={{ color: "var(--text-dim)" }}>{labels.noNews || "No news available."}</div>}
-          {!newsLoading && news.length > 0 && (
-            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-              {news.map((item, index) => (
-                <li key={index} style={{ marginBottom: 10 }}>
-                  <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--link)", textDecoration: "none", fontSize: 14, fontWeight: 600 }}>
-                    {item.title}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
       <div style={{ padding: "0 16px" }}>
         {sortedTrades.length === 0 && <EmptyState text={labels.noTrades} />}
         {sortedTrades.map((trade) => <TradeRow key={trade.id} trade={trade} onClick={() => onOpenDetail(trade.id)} t={labels} />)}

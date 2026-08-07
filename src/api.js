@@ -1,4 +1,6 @@
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
+const API_BASE = import.meta.env.DEV
+  ? '/api'
+  : import.meta.env.VITE_API_URL || (typeof window !== 'undefined' ? `${window.location.origin}/api` : '/api');
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const FINNHUB_API_KEY = import.meta.env.VITE_FINNHUB_API_KEY || 'demo';
 
@@ -51,7 +53,7 @@ function generateId() {
 
 async function request(path, options = {}) {
   const token = getToken();
-  const shouldUseLocalFallback = !token && import.meta.env.DEV;
+  const shouldUseLocalFallback = !token && import.meta.env.DEV && path !== '/news/latest';
 
   if (shouldUseLocalFallback) {
     if (options.method && options.method !== 'GET') {
