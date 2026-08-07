@@ -1034,7 +1034,14 @@ export function CloseTradeForm({ trade, onClose, onSubmit, t }) {
           <div style={{ marginBottom: 14, width: "calc(50% - 5px)" }}><NumField label={labels.rMultipleLabel} value={form.rMultiple} onChange={(value) => setValue("rMultiple", value)} /></div>
           <div style={{ marginBottom: 14 }}><label className="tj-label">{labels.commentAfterTrade}</label><textarea className="tj-input" rows={3} placeholder={labels.commentAfterTrade} value={form.postComment} onChange={(event) => setValue("postComment", event.target.value)} /></div>
           <div style={{ marginBottom: 20 }}><label className="tj-label">{labels.exitScreenshotLabel}</label><input type="file" accept="image/*" ref={fileRef} onChange={onImage} style={{ display: "none" }} />{form.exitScreenshot ? <img src={form.exitScreenshot} alt="exit" style={{ width: "100%", borderRadius: 10, border: "1px solid var(--border)" }} /> : <button className="tj-btn-ghost" style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }} onClick={() => fileRef.current.click()}><Camera size={15} /> {labels.attachScreenshot}</button>}</div>
-          <button className="tj-btn-primary" style={{ width: "100%" }} onClick={() => onSubmit({ ...form, exitScreenshot: form.exitScreenshot || null })} disabled={!form.exitPrice}>{labels.closeTrade}</button>
+          <button className="tj-btn-primary" style={{ width: "100%" }} onClick={() => onSubmit({
+            ...form,
+            exitPrice: form.exitPrice === "" || form.exitPrice == null ? null : Number(form.exitPrice),
+            pnl: form.pnl === "" || form.pnl == null ? null : Number(form.pnl),
+            pnlPercent: form.pnlPercent === "" || form.pnlPercent == null ? null : Number(form.pnlPercent),
+            rMultiple: form.rMultiple === "" || form.rMultiple == null ? null : Number(form.rMultiple),
+            exitScreenshot: form.exitScreenshot || null,
+          })} disabled={!form.exitPrice}>{labels.closeTrade}</button>
         </div>
       </div>
     </div>

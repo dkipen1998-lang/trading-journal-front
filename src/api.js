@@ -448,7 +448,7 @@ export async function deleteProfile(id) {
 
 export async function createTrade(trade) {
   const token = getToken();
-  const shouldUseLocalFallback = !token && import.meta.env.DEV;
+  const shouldUseLocalFallback = !token;
   if (shouldUseLocalFallback) {
     const trades = readLocalTrades();
     const createdTrade = {
@@ -474,7 +474,7 @@ export async function createTrade(trade) {
 
 export async function updateTrade(id, trade) {
   const token = getToken();
-  const shouldUseLocalFallback = !token && import.meta.env.DEV;
+  const shouldUseLocalFallback = !token;
   if (shouldUseLocalFallback) {
     const trades = readLocalTrades();
     const nextTrades = trades.map((item) => (item.id === id ? { ...item, ...trade } : item));
@@ -490,7 +490,7 @@ export async function updateTrade(id, trade) {
 
 export async function closeTrade(id, payload) {
   const token = getToken();
-  const shouldUseLocalFallback = !token && import.meta.env.DEV;
+  const shouldUseLocalFallback = !token;
   if (shouldUseLocalFallback) {
     const trades = readLocalTrades();
     const nextTrades = trades.map((item) => (item.id === id ? { ...item, ...payload, status: 'closed' } : item));
@@ -506,7 +506,7 @@ export async function closeTrade(id, payload) {
 
 export async function deleteTrade(id) {
   const token = getToken();
-  const shouldUseLocalFallback = !token && import.meta.env.DEV;
+  const shouldUseLocalFallback = !token;
   if (shouldUseLocalFallback) {
     const trades = readLocalTrades();
     const nextTrades = trades.filter((item) => item.id !== id);
@@ -521,7 +521,7 @@ export async function deleteTrade(id) {
 
 export async function duplicateTrade(id) {
   const token = getToken();
-  const shouldUseLocalFallback = !token && import.meta.env.DEV;
+  const shouldUseLocalFallback = !token;
   if (shouldUseLocalFallback) {
     const trades = readLocalTrades();
     const source = trades.find((item) => item.id === id);

@@ -1022,61 +1022,35 @@ function inferInstrumentType(symbol, entryPrice) {
   return "stock";
 }
 
-// --- CoinGecko icon helper -------------------------------------------------
-async function fetchCoinListIfNeeded() {
-  if (typeof window === 'undefined') return {};
-  try {
-    const raw = window.localStorage.getItem('tj-coinmap-cache');
-    const now = Date.now();
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed.timestamp && (now - parsed.timestamp) < 1000 * 60 * 60 * 24 * 7 && parsed.map) {
-        return parsed.map;
-      }
-    }
-    const resp = await fetch('https://api.coingecko.com/api/v3/coins/list');
-    if (!resp.ok) return {};
-    const list = await resp.json();
-    const map = {};
-    for (const item of list) {
-      if (!item || !item.symbol || !item.id) continue;
-      const key = item.symbol.trim().toLowerCase();
-      if (!map[key]) map[key] = item.id;
-    }
-    try { window.localStorage.setItem('tj-coinmap-cache', JSON.stringify({ timestamp: now, map })); } catch (e) {}
-    return map;
-  } catch (e) {
-    return {};
-  }
+// --- Binance icon helper ---------------------------------------------------
+function getBinanceIconUrl(symbol) {
+  if (typeof symbol !== 'string') return null;
+  const normalized = symbol.trim().toUpperCase().replace(/\s+/g, '');
+  if (!normalized) return null;
+  const base = normalized.endsWith('USDT') ? normalized.slice(0, -4) : normalized.endsWith('USD') ? normalized.slice(0, -3) : normalized;
+  const slug = base.replace(/[^A-Z0-9]/g, '').toUpperCase();
+  if (!slug) return null;
+  return `https://public.bnbstatic.com/image/cms/coin/64x64/${slug}.png`;
 }
 
-async function getCoinGeckoIcon(symbol) {
+async function getCryptoIcon(symbol) {
   if (typeof window === 'undefined') return null;
   try {
-    // check cached icons to avoid repeated CoinGecko hits
-    try {
-      const rawCache = window.localStorage.getItem('tj-coinicon-cache');
-      if (rawCache) {
-        const parsed = JSON.parse(rawCache);
-        const cached = parsed[(symbol || '').toUpperCase()];
-        if (cached) return cached;
-      }
-    } catch (e) {}
-    const normalized = (symbol || '').toUpperCase().replace(/\s+/g, '');
-    let base = normalized;
-    if (base.endsWith('USDT')) base = base.slice(0, -4);
-    else if (base.endsWith('USD')) base = base.slice(0, -3);
-    // map some common aliases
-    const alias = base.replace(/[-_.].*$/, '');
+    const cacheKey = `tj-coinicon-cache`;
+    const rawCache = window.localStorage.getItem(cacheKey);
+    if (rawCache) {
+      const parsed = JSON.parse(rawCache);
+      const cached = parsed[(symbol || '').toUpperCase()];
+      if (cached) return cached;
+    }
+  } catch (e) {}
 
-    const map = await fetchCoinListIfNeeded();
-    const id = map[(alias || '').toLowerCase()] || map[(base || '').toLowerCase()];
-    if (!id) return null;
-    // fetch coin details
-    const resp = await fetch(`https://api.coingecko.com/api/v3/coins/${encodeURIComponent(id)}?localization=false&tickers=false&market_data=false&community_data=false&developer_data=false&sparkline=false`);
-    if (!resp.ok) return null;
-    const json = await resp.json();
-    const url = json?.image?.small || json?.image?.thumb || json?.image?.large || null;
+  const url = getBinanceIconUrl(symbol);
+  if (!url) return null;
+
+  try {
+    const response = await fetch(url, { method: 'GET' });
+    if (!response.ok) return null;
     try {
       const rawCache = window.localStorage.getItem('tj-coinicon-cache');
       const parsed = rawCache ? JSON.parse(rawCache) : {};
@@ -1665,7 +1639,7 @@ export default function TradingJournalApp() {
               if (!logo) {
                 const inferred = inferInstrumentType(symbol);
                 if (inferred === 'crypto') {
-                  const icon = await getCoinGeckoIcon(symbol);
+                  const icon = await getCryptoIcon(symbol);
                   if (icon) logo = icon;
                 }
               }
