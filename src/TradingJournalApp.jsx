@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useDeferredValue } from "react";
-import { loginWithTelegram, fetchTrades, fetchProfiles, createProfile, updateProfile, createTrade, updateTrade, closeTrade, deleteTrade, deleteProfile, duplicateTrade, fetchStockSnapshot } from "./api";
+import { loginWithTelegram, fetchTrades, fetchProfiles, createProfile, updateProfile, createTrade, updateTrade, closeTrade, deleteTrade, deleteProfile, duplicateTrade, fetchStockSnapshot, fetchTopBinanceVolumeSymbols } from "./api";
 import {
   Plus, Search, SlidersHorizontal, Settings, X, Edit2, Trash2, Copy, Camera,
   ChevronRight, Home, BookOpen, BarChart2, Download, Eye,
@@ -757,6 +757,21 @@ const formatStockPrice = (value, currency = "USD") => {
   }
 };
 const normalizeTicker = (value) => (value || "").trim().toUpperCase();
+function formatTickerSymbol(symbol) {
+  const value = (symbol || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!value) return "";
+
+  const normalized = value;
+  const isForexPair = /^(EUR|GBP|JPY|AUD|CAD|CHF|NZD|CNY|SEK|NOK|MXN|ZAR|TRY|INR|KRW)USD$/i.test(normalized);
+  if (!isForexPair && normalized.endsWith("USD") && !normalized.endsWith("USDT")) {
+    return normalized.replace(/USD$/i, "USDT");
+  }
+
+  const cryptoBase = CANONICAL_CRYPTO_SYMBOLS.find((crypto) => normalized === `${crypto}USD` || normalized === `${crypto}USDT` || normalized === crypto);
+  if (cryptoBase) return `${cryptoBase}USDT`;
+  return normalized;
+}
+
 function resolveTradeMetrics(trade) {
   if (!trade) {
     return {
@@ -900,6 +915,23 @@ function seedTrades() {
 const DEFAULT_SETUPS = ["Pumpt", "Visual", "News"];
 const DEFAULT_TAGS = ["Pumpt", "Visual", "News"];
 
+const CANONICAL_CRYPTO_SYMBOLS = [
+  "BTC","ETH","BNB","SOL","XRP","ADA","DOGE","TRX","AVAX","LINK","DOT","LTC","NEAR","TON","SHIB","BCH","MATIC","UNI","ATOM","ICP","APT","SUI","XMR","FIL","ARB","OP","WIF","PEPE",
+];
+
+function canonicalizeTicker(symbol) {
+  const value = (symbol || "").trim().toUpperCase().replace(/\s+/g, "");
+  if (!value) return "";
+  const stripped = value.replace(/[.:].*$/, "");
+  const isForex = /^(EUR|GBP|JPY|AUD|CAD|CHF|NZD|CNY|SEK|NOK|MXN|ZAR|TRY|INR|KRW)USD$/.test(stripped);
+  if (!isForex && stripped.endsWith("USD") && !stripped.endsWith("USDT")) {
+    return stripped.replace(/USD$/i, "USDT");
+  }
+  const cryptoMatch = CANONICAL_CRYPTO_SYMBOLS.find((crypto) => stripped === crypto || stripped === `${crypto}USD` || stripped === `${crypto}USDT`);
+  if (cryptoMatch) return `${cryptoMatch}USDT`;
+  return stripped;
+}
+
 function normalizeWatchlist(items) {
   if (!Array.isArray(items)) return [];
   return items
@@ -951,6 +983,8 @@ const DEFAULT_SCREENER_UNIVERSE = [
 
 function inferScreenerInstrumentType(symbol) {
   const normalized = (symbol || "").toUpperCase();
+  if (normalized.endsWith("USDT")) return "crypto";
+  if (normalized.endsWith("USD") && !/^(EUR|GBP|JPY|AUD|CAD|CHF|NZD|CNY|SEK|NOK|MXN|ZAR|TRY|INR|KRW)USD$/.test(normalized)) return "crypto";
   if (/^(BTC|ETH|BNB|SOL|XRP|ADA|DOGE|TRX|AVAX|LINK|DOT|LTC|NEAR|TON|SHIB|BCH|MATIC|UNI|ATOM|ICP|APT|SUI|XMR|FIL|ARB|OP|WIF|PEPE)/.test(normalized)) return "crypto";
   if (/^(EUR|GBP|USD|JPY|AUD|CAD|CHF|NZD|CNY|SEK|NOK|MXN|ZAR|TRY|INR|KRW)/.test(normalized) && normalized.includes("USD")) return "forex";
   return "stock";
@@ -958,6 +992,8 @@ function inferScreenerInstrumentType(symbol) {
 
 function inferScreenerSector(symbol) {
   const normalized = (symbol || "").toUpperCase();
+  if (normalized.endsWith("USDT")) return "Crypto";
+  if (normalized.endsWith("USD") && !/^(EUR|GBP|JPY|AUD|CAD|CHF|NZD|CNY|SEK|NOK|MXN|ZAR|TRY|INR)USD$/.test(normalized)) return "Crypto";
   if (/^(BTC|ETH|BNB|SOL|XRP|ADA|DOGE|TRX|AVAX|LINK|DOT|LTC|NEAR|TON|SHIB|BCH|MATIC|UNI|ATOM|ICP|APT|SUI|XMR|FIL|ARB|OP|WIF|PEPE)/.test(normalized)) return "Crypto";
   if (/^(EUR|GBP|USD|JPY|AUD|CAD|CHF|NZD|CNY|SEK|NOK|MXN|ZAR|TRY|INR|KRW)/.test(normalized) && normalized.includes("USD")) return "FX";
   return "Custom";
@@ -966,12 +1002,11 @@ function inferScreenerSector(symbol) {
 function inferInstrumentType(symbol, entryPrice) {
   const normalized = (symbol || "").toUpperCase().trim();
   const price = Number(entryPrice);
-  const cryptoPrefix = /^(BTC|ETH|BNB|SOL|XRP|ADA|DOGE|TRX|AVAX|LINK|DOT|LTC|NEAR|TON|SHIB|BCH|MATIC|UNI|ATOM|ICP|APT|SUI|XMR|FIL|ARB|OP|WIF|PEPE)/;
   const forexPrefix = /^(EUR|GBP|USD|JPY|AUD|CAD|CHF|NZD|CNY|SEK|NOK|MXN|ZAR|TRY|INR|KRW)/;
 
-  if (cryptoPrefix.test(normalized)) return "crypto";
+  if (normalized.endsWith("USDT")) return "crypto";
   if (normalized.endsWith("USD") && !forexPrefix.test(normalized.replace(/USD$/, ""))) return "crypto";
-  if (/^[A-Z]{3,5}$/.test(normalized) && normalized.includes("USD") && normalized.length > 5) return "crypto";
+  if (/^(BTC|ETH|BNB|SOL|XRP|ADA|DOGE|TRX|AVAX|LINK|DOT|LTC|NEAR|TON|SHIB|BCH|MATIC|UNI|ATOM|ICP|APT|SUI|XMR|FIL|ARB|OP|WIF|PEPE)/.test(normalized)) return "crypto";
   if (forexPrefix.test(normalized) && normalized.includes("USD")) return "forex";
 
   if (Number.isFinite(price)) {
@@ -996,20 +1031,6 @@ function readSavedScreenerFilters() {
 function writeSavedScreenerFilters(filters) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem("tj-screener-filters", JSON.stringify(filters));
-}
-
-function readSavedScreenerAlerts() {
-  if (typeof window === "undefined") return [];
-  try {
-    return JSON.parse(window.localStorage.getItem("tj-screener-alerts") || "[]");
-  } catch {
-    return [];
-  }
-}
-
-function writeSavedScreenerAlerts(alerts) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem("tj-screener-alerts", JSON.stringify(alerts));
 }
 
 function getWatchlistStorageKey(profileId) {
@@ -1129,13 +1150,20 @@ export default function TradingJournalApp() {
   const profileSwitchInFlightRef = useRef(false);
   const watchlistMetadataInFlightRef = useRef(new Set());
   const watchlistMetadataLoadedRef = useRef(new Set());
+  const SCREENER_PAGE_SIZE = 12;
   const [screenerRows, setScreenerRows] = useState([]);
   const [screenerLoading, setScreenerLoading] = useState(false);
+  const [screenerDisplayLimit, setScreenerDisplayLimit] = useState(SCREENER_PAGE_SIZE);
+  const [binanceTopSymbols, setBinanceTopSymbols] = useState([]);
   const screenerDisabled = false;
   const [screenerFilters, setScreenerFilters] = useState({
     query: "",
     sector: "all",
     instrument: "all",
+    changeDirection: "any",
+    changeThreshold: "",
+    vwapDistance: "",
+    relativeVolume: "",
     minChange: "",
     minVolume: "",
     minPrice: "",
@@ -1143,7 +1171,6 @@ export default function TradingJournalApp() {
     sortDir: "desc",
   });
   const [savedScreenerFilters, setSavedScreenerFilters] = useState(() => readSavedScreenerFilters());
-  const [screenerAlerts, setScreenerAlerts] = useState(() => readSavedScreenerAlerts());
   const [screenerFilterName, setScreenerFilterName] = useState("");
   const [activeScreenerFilterId, setActiveScreenerFilterId] = useState("");
   const lastManualScreenerSymbol = useRef("");
@@ -1153,36 +1180,59 @@ export default function TradingJournalApp() {
     const sector = screenerFilters.sector === "all" ? "" : screenerFilters.sector;
     const instrument = screenerFilters.instrument === "all" ? "" : screenerFilters.instrument;
 
-    const symbols = new Set();
+    const symbols = new Map();
     const addSymbol = (symbol) => {
       const normalized = (symbol || "").trim().toUpperCase();
       if (!normalized || !/^[A-Z0-9.\-]+$/.test(normalized)) return;
-      if (query && !`${normalized} `.includes(query.toUpperCase())) return;
-      symbols.add(normalized);
+      const canonical = canonicalizeTicker(normalized);
+      if (!canonical) return;
+      const displaySymbol = formatTickerSymbol(normalized);
+      if (query && !`${normalized} `.includes(query.toUpperCase()) && !`${canonical} `.includes(query.toUpperCase()) && !`${displaySymbol} `.includes(query.toUpperCase())) return;
+      if (!symbols.has(canonical)) {
+        symbols.set(canonical, displaySymbol);
+      }
     };
 
-    DEFAULT_SCREENER_UNIVERSE.forEach((item) => {
-      if (sector && item.sector !== sector) return;
-      if (instrument && item.instrumentType !== instrument) return;
-      addSymbol(item.symbol);
-    });
+    const includeBinanceTop = instrument === "crypto" || sector === "Crypto" || screenerFilters.changeDirection !== "any" || (!instrument && !sector);
+    const onlyBinanceTop = screenerFilters.changeDirection !== "any" && !instrument && !sector;
 
-    watchlist.forEach((item) => {
-      const symbol = item?.symbol || item?.ticker || "";
-      if (sector && item?.sector && item.sector !== sector) return;
-      if (instrument && item?.instrumentType && item.instrumentType !== instrument) return;
-      addSymbol(symbol);
-    });
+    if (!onlyBinanceTop) {
+      DEFAULT_SCREENER_UNIVERSE.forEach((item) => {
+        if (sector && item.sector !== sector) return;
+        if (instrument && item.instrumentType !== instrument) return;
+        addSymbol(item.symbol);
+      });
 
-    trades.forEach((trade) => {
-      const symbol = trade?.ticker || trade?.symbol || "";
-      if (sector && trade?.sector && trade.sector !== sector) return;
-      if (instrument && trade?.instrumentType && trade.instrumentType !== instrument) return;
-      addSymbol(symbol);
-    });
+      watchlist.forEach((item) => {
+        const symbol = item?.symbol || item?.ticker || "";
+        const inferredSector = inferScreenerSector(symbol);
+        const inferredInstrument = inferScreenerInstrumentType(symbol);
+        if (sector && inferredSector !== sector) return;
+        if (instrument && inferredInstrument !== instrument) return;
+        addSymbol(symbol);
+      });
 
-    return Array.from(symbols).slice(0, 24);
-  }, [screenerFilters.query, screenerFilters.sector, screenerFilters.instrument, watchlist, trades]);
+      trades.forEach((trade) => {
+        const symbol = trade?.ticker || trade?.symbol || "";
+        const inferredSector = inferScreenerSector(symbol);
+        const inferredInstrument = inferScreenerInstrumentType(symbol);
+        if (sector && inferredSector !== sector) return;
+        if (instrument && inferredInstrument !== instrument) return;
+        addSymbol(symbol);
+      });
+    }
+
+    if (includeBinanceTop) {
+      binanceTopSymbols.forEach((symbol) => {
+        addSymbol(symbol);
+      });
+    }
+
+    return Array.from(symbols.values());
+  }, [screenerFilters.query, screenerFilters.sector, screenerFilters.instrument, watchlist, trades, binanceTopSymbols]);
+
+  const hasMoreScreenerSymbols = screenerSeedSymbols.length > screenerDisplayLimit;
+  const visibleScreenerSymbols = useMemo(() => screenerSeedSymbols.slice(0, screenerDisplayLimit), [screenerSeedSymbols, screenerDisplayLimit]);
   const [profiles, setProfiles] = useState(() => {
     if (typeof window === "undefined") return [];
     try {
@@ -1274,6 +1324,17 @@ export default function TradingJournalApp() {
         }
       }
     })();
+
+    (async () => {
+      try {
+        const symbols = await fetchTopBinanceVolumeSymbols(200);
+        if (Array.isArray(symbols) && symbols.length) {
+          setBinanceTopSymbols(symbols);
+        }
+      } catch {
+        // ignore Binance top symbols load failures
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -1349,25 +1410,34 @@ export default function TradingJournalApp() {
 
       const nextRows = (await Promise.allSettled(
         candidateSymbols.map(async (symbol) => {
-          const fallback = DEFAULT_SCREENER_UNIVERSE.find((item) => item.symbol === symbol) || null;
+          const formattedSymbol = formatTickerSymbol(symbol);
+          const fallback = DEFAULT_SCREENER_UNIVERSE.find((item) => formatTickerSymbol(item.symbol) === formattedSymbol) || null;
           try {
-            const snapshot = await fetchStockSnapshot(symbol, { source: (activeProfile?.settings?.tickerDataSource || standardProfile?.settings?.tickerDataSource || 'auto') });
+            const snapshot = await fetchStockSnapshot(formattedSymbol, { source: (activeProfile?.settings?.tickerDataSource || standardProfile?.settings?.tickerDataSource || 'auto') });
             if (!snapshot) {
-              return fallback ? { ...fallback } : { symbol, name: symbol, sector: "Custom", instrumentType: inferScreenerInstrumentType(symbol), volume: null, marketCap: null, currency: "USD", exchange: "" };
+              return fallback ? { ...fallback } : { symbol: formattedSymbol, name: formattedSymbol, sector: "Custom", instrumentType: inferScreenerInstrumentType(formattedSymbol), volume: null, marketCap: null, currency: "USD", exchange: "" };
             }
+            const price = snapshot.price ?? fallback?.price ?? null;
+            const vwap = snapshot.vwap ?? null;
+            const volume = snapshot.volume ?? fallback?.volume ?? null;
+            const averageVolume = snapshot.averageVolume ?? null;
             return {
               ...(fallback || {}),
-              symbol,
-              name: snapshot.name || fallback?.name || symbol,
-              sector: fallback?.sector || inferScreenerSector(symbol),
-              instrumentType: fallback?.instrumentType || inferScreenerInstrumentType(symbol),
-              volume: fallback?.volume ?? null,
+              symbol: formattedSymbol,
+              name: snapshot.name || fallback?.name || formattedSymbol,
+              sector: fallback?.sector || inferScreenerSector(formattedSymbol),
+              instrumentType: fallback?.instrumentType || inferScreenerInstrumentType(formattedSymbol),
+              volume,
               marketCap: fallback?.marketCap ?? null,
               currency: snapshot.currency || fallback?.currency || "USD",
               exchange: snapshot.exchange || fallback?.exchange || "",
-              price: snapshot.price ?? fallback?.price ?? null,
+              price,
               change: snapshot.change ?? null,
               changePercent: snapshot.changePercent ?? null,
+              vwap,
+              vwapDistance: price != null && vwap != null && vwap !== 0 ? ((price - vwap) / vwap) * 100 : null,
+              averageVolume,
+              relativeVolume: volume != null && averageVolume != null && averageVolume > 0 ? volume / averageVolume : null,
               preMarketPrice: snapshot.preMarketPrice ?? null,
               preMarketChange: snapshot.preMarketChange ?? null,
               preMarketChangePercent: snapshot.preMarketChangePercent ?? null,
@@ -1379,20 +1449,17 @@ export default function TradingJournalApp() {
         }),
       )).map((result) => (result.status === "fulfilled" ? result.value : null)).filter(Boolean);
 
+      const uniqueRows = [];
+      const seenSymbols = new Set();
+      nextRows.forEach((row) => {
+        const symbolKey = canonicalizeTicker((row?.symbol || "").toUpperCase());
+        if (!symbolKey || seenSymbols.has(symbolKey)) return;
+        seenSymbols.add(symbolKey);
+        uniqueRows.push(row);
+      });
+
       if (!cancelled) {
-        setScreenerRows((prev) => {
-          const merged = [...prev];
-          nextRows.forEach((row) => {
-            const key = String(row.symbol || "").toUpperCase();
-            const index = merged.findIndex((item) => String(item.symbol || "").toUpperCase() === key);
-            if (index >= 0) {
-              merged[index] = row;
-            } else {
-              merged.push(row);
-            }
-          });
-          return merged;
-        });
+        setScreenerRows(uniqueRows);
       }
       if (!cancelled) {
         screenerInitialLoadDoneRef.current = true;
@@ -1407,6 +1474,10 @@ export default function TradingJournalApp() {
   }, [screenerSeedSymbols]);
 
   useEffect(() => {
+    setScreenerDisplayLimit(SCREENER_PAGE_SIZE);
+  }, [screenerSeedSymbols.join("|")]);
+
+  useEffect(() => {
     if (screenerDisabled) {
       return;
     }
@@ -1418,34 +1489,45 @@ export default function TradingJournalApp() {
     }
 
     const normalizedQuery = query.toUpperCase();
+    const canonicalQuery = canonicalizeTicker(normalizedQuery);
+    const querySymbol = formatTickerSymbol(normalizedQuery);
     const looksLikeTicker = /^[A-Z0-9.\-]{1,10}$/.test(normalizedQuery);
     if (!looksLikeTicker) return;
-    if (lastManualScreenerSymbol.current === normalizedQuery) return;
+    if (lastManualScreenerSymbol.current === canonicalQuery) return;
 
-    lastManualScreenerSymbol.current = normalizedQuery;
+    lastManualScreenerSymbol.current = canonicalQuery;
     let cancelled = false;
     (async () => {
-      const snapshot = await fetchStockSnapshot(normalizedQuery, { source: (activeProfile?.settings?.tickerDataSource || standardProfile?.settings?.tickerDataSource || 'auto') });
+      const snapshot = await fetchStockSnapshot(querySymbol, { source: (activeProfile?.settings?.tickerDataSource || standardProfile?.settings?.tickerDataSource || 'auto') });
       if (cancelled) return;
+      const price = snapshot?.price ?? null;
+      const vwap = snapshot?.vwap ?? null;
+      const volume = snapshot?.volume ?? null;
+      const avgVolume = snapshot?.averageVolume ?? null;
       const newRow = {
-        symbol: normalizedQuery,
-        name: snapshot?.name || normalizedQuery,
-        sector: inferScreenerSector(normalizedQuery),
-        instrumentType: inferScreenerInstrumentType(normalizedQuery),
-        volume: null,
+        symbol: querySymbol,
+        name: snapshot?.name || querySymbol,
+        sector: inferScreenerSector(querySymbol),
+        instrumentType: inferScreenerInstrumentType(querySymbol),
+        volume,
         marketCap: null,
         currency: snapshot?.currency || "USD",
         exchange: snapshot?.exchange || "",
-        price: snapshot?.price ?? null,
+        price,
         change: snapshot?.change ?? null,
         changePercent: snapshot?.changePercent ?? null,
+        vwap,
+        vwapDistance: price != null && vwap != null && vwap !== 0 ? ((price - vwap) / vwap) * 100 : null,
+        averageVolume: avgVolume,
+        relativeVolume: volume != null && avgVolume != null && avgVolume > 0 ? volume / avgVolume : null,
         preMarketPrice: snapshot?.preMarketPrice ?? null,
         preMarketChange: snapshot?.preMarketChange ?? null,
         preMarketChangePercent: snapshot?.preMarketChangePercent ?? null,
         logo: snapshot?.logo || "",
       };
       setScreenerRows((prev) => {
-        if (prev.some((row) => (row.symbol || "").toUpperCase() === normalizedQuery)) {
+        const queryKey = canonicalizeTicker(querySymbol);
+        if (prev.some((row) => canonicalizeTicker((row.symbol || "").toUpperCase()) === queryKey)) {
           return prev;
         }
         return [newRow, ...prev];
@@ -1566,14 +1648,6 @@ export default function TradingJournalApp() {
     };
   }, [watchlist, trades, activeProfileId, profiles, standardProfile]);
   useEffect(() => {
-    if (screenerAlerts.length) {
-      writeSavedScreenerAlerts(screenerAlerts);
-    } else {
-      writeSavedScreenerAlerts([]);
-    }
-  }, [screenerAlerts]);
-
-  useEffect(() => {
     STORAGE.set("tj-profiles", JSON.stringify(profiles)).catch(() => {});
   }, [profiles]);
   useEffect(() => {
@@ -1693,53 +1767,6 @@ export default function TradingJournalApp() {
       setActiveScreenerFilterId("");
     }
   }
-
-  function addScreenerAlert(alert) {
-    const nextAlert = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      ...alert,
-      createdAt: Date.now(),
-    };
-    setScreenerAlerts((prev) => [nextAlert, ...prev]);
-    showToast(`${alert.symbol} alert saved`);
-
-    if (typeof window !== "undefined" && "Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
-      Notification.requestPermission().catch(() => {});
-    }
-  }
-
-  function removeScreenerAlert(id) {
-    setScreenerAlerts((prev) => prev.filter((item) => item.id !== id));
-  }
-
-  useEffect(() => {
-    if (!screenerRows.length || !screenerAlerts.length) return;
-
-    let shouldPersist = false;
-    const nextAlerts = screenerAlerts.map((alert) => {
-      if (alert.triggered) return alert;
-      const row = screenerRows.find((item) => item.symbol === alert.symbol);
-      const price = row?.price != null ? Number(row.price) : null;
-      if (price == null || Number.isNaN(price)) return alert;
-      const target = Number(alert.targetPrice);
-      if (Number.isNaN(target)) return alert;
-      const shouldFire = alert.condition === "above" ? price >= target : price <= target;
-      if (!shouldFire) return alert;
-
-      shouldPersist = true;
-      if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
-        new Notification(`${alert.symbol} alert`, {
-          body: `${alert.symbol} ${alert.condition === "above" ? "is above" : "is below"} ${formatStockPrice(target, row?.currency || "USD")}`,
-        });
-      }
-      showToast(`${alert.symbol} alert triggered`);
-      return { ...alert, triggered: true, triggeredAt: Date.now() };
-    });
-
-    if (shouldPersist) {
-      setScreenerAlerts(nextAlerts);
-    }
-  }, [screenerRows, screenerAlerts]);
 
   async function addTrade(t) {
     if (saveInFlightRef.current) return;
@@ -2307,6 +2334,7 @@ export default function TradingJournalApp() {
         )}
 
         {tab === "screener" && (
+          <>
           <ScreenerPanel
             rows={screenerRows}
             loading={screenerLoading}
@@ -2316,15 +2344,20 @@ export default function TradingJournalApp() {
             onSaveFilter={saveScreenerFilter}
             onApplyFilter={applyScreenerFilter}
             onRemoveFilter={removeScreenerFilter}
-            onAddAlert={addScreenerAlert}
-            onRemoveAlert={removeScreenerAlert}
-            alerts={screenerAlerts}
             filterName={screenerFilterName}
             setFilterName={setScreenerFilterName}
             activeFilterId={activeScreenerFilterId}
             t={t}
           />
-        )}
+          {hasMoreScreenerSymbols && (
+            <div style={{ padding: "0 16px 100px" }}>
+              <button className="tj-btn-primary" style={{ width: "100%", padding: "12px 0" }} onClick={() => setScreenerDisplayLimit((prev) => prev + SCREENER_PAGE_SIZE)}>
+                Load more symbols
+              </button>
+            </div>
+          )}
+        </>
+      )}
 
         <button className="tj-fab" onClick={() => setNewOpen(true)} aria-label="New trade">
           <Plus size={22} strokeWidth={2.2} />

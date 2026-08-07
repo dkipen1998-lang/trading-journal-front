@@ -102,9 +102,13 @@ async function requestFinnhub(path) {
   }
 }
 
-async function requestBinance(path) {
+const BINANCE_SPOT_BASE = 'https://api.binance.com';
+const BINANCE_FUTURES_BASE = 'https://fapi.binance.com';
+
+async function requestBinance(path, { futures = false } = {}) {
   try {
-    const response = await fetch(`https://api.binance.com/api/v3${path}`);
+    const base = futures ? BINANCE_FUTURES_BASE : BINANCE_SPOT_BASE;
+    const response = await fetch(`${base}${path}`);
     if (!response.ok) {
       return null;
     }
@@ -112,6 +116,37 @@ async function requestBinance(path) {
   } catch {
     return null;
   }
+}
+
+const BINANCE_CRYPTO_EXCLUDE_BASES = new Set([
+  'BUSD', 'USDC', 'USDS', 'TUSD', 'DAI', 'UST', 'EUR', 'GBP', 'TRY', 'AUD', 'RUB', 'JPY', 'CHF', 'SGD', 'CNH', 'HUSD', 'PAX', 'USDP', 'USDK', 'VAI', 'LUSD', 'USDX', 'FEI', 'EURS', 'GUSD'
+]);
+
+function isBinanceCryptoPair(symbol) {
+  if (typeof symbol !== 'string') return false;
+  const value = symbol.trim().toUpperCase();
+  if (!value.endsWith('USDT')) return false;
+  const base = value.slice(0, -4);
+  if (!base || BINANCE_CRYPTO_EXCLUDE_BASES.has(base)) return false;
+  if (/(?:UP|DOWN|BULL|BEAR|3L|3S|5L|5S|10L|10S)$/i.test(base)) return false;
+  return true;
+}
+
+export async function fetchTopBinanceVolumeSymbols(limit = 100) {
+  const tickers = await requestBinance('/fapi/v1/ticker/24hr', { futures: true });
+  if (!Array.isArray(tickers)) return [];
+
+  const symbols = tickers
+    .filter((item) => item && typeof item.symbol === 'string' && isBinanceCryptoPair(item.symbol))
+    .map((item) => ({
+      symbol: item.symbol,
+      quoteVolume: Number(item.quoteVolume ?? item.volume ?? 0) || 0,
+    }))
+    .sort((a, b) => b.quoteVolume - a.quoteVolume)
+    .slice(0, Math.max(0, Math.min(limit, 200)))
+    .map((item) => item.symbol);
+
+  return Array.from(new Set(symbols));
 }
 
 function normalizeYahooSymbol(symbol, instrumentType) {
@@ -139,6 +174,9 @@ async function requestYahooQuote(symbol, instrumentType) {
       price: typeof quote.regularMarketPrice === 'number' ? quote.regularMarketPrice : null,
       change: typeof quote.regularMarketChange === 'number' ? quote.regularMarketChange : null,
       changePercent: typeof quote.regularMarketChangePercent === 'number' ? quote.regularMarketChangePercent : null,
+      volume: typeof quote.regularMarketVolume === 'number' ? quote.regularMarketVolume : null,
+      averageVolume: typeof quote.averageDailyVolume3Month === 'number' ? quote.averageDailyVolume3Month : null,
+      vwap: typeof quote.vwap === 'number' ? quote.vwap : null,
       logo: '',
       exchange: quote.fullExchangeName || quote.exchange || '',
       currency: quote.currency || '',
@@ -180,20 +218,21 @@ export async function fetchStockSnapshot(symbol, options = {}) {
     return null;
   }
 
-  const cryptoPrefix = /^(BTC|ETH|BNB|SOL|XRP|ADA|DOGE|TRX|AVAX|LINK|DOT|LTC|NEAR|TON|SHIB|BCH|MATIC|UNI|ATOM|ICP|APT|SUI|XMR|FIL|ARB|OP|WIF|PEPE)/i;
+  const isCrypto = isCryptoSymbol(normalizedSymbol);
 
-  const isCrypto = cryptoPrefix.test(normalizedSymbol);
-
-  // If preferredSource explicitly set, respect it (binance or finnhub). Otherwise fallback to auto-detection.
-  if (preferredSource === 'binance' || (preferredSource === null && isCrypto)) {
+  // Cryptocurrencies and USDT futures pairs should always use Binance futures.
+  if (isCrypto || preferredSource === 'binance') {
     const pair = normalizedSymbol.replace(/USD$/i, 'USDT');
-    const quote = await requestBinance(`/ticker/24hr?symbol=${encodeURIComponent(pair)}`);
+    const quote = await requestBinance(`/fapi/v1/ticker/24hr?symbol=${encodeURIComponent(pair)}`, { futures: true });
     return {
       price: typeof quote?.lastPrice === 'string' ? Number(quote.lastPrice) : null,
       change: typeof quote?.priceChange === 'string' ? Number(quote.priceChange) : null,
       changePercent: typeof quote?.priceChangePercent === 'string' ? Number(quote.priceChangePercent) : null,
+      volume: typeof quote?.volume === 'string' ? Number(quote.volume) : null,
+      averageVolume: null,
+      vwap: typeof quote?.weightedAvgPrice === 'string' ? Number(quote.weightedAvgPrice) : null,
       logo: '',
-      exchange: 'Binance',
+      exchange: 'Binance Futures',
       currency: 'USDT',
       name: normalizedSymbol,
     };
@@ -212,6 +251,9 @@ export async function fetchStockSnapshot(symbol, options = {}) {
     price: typeof quote?.c === 'number' ? quote.c : quote?.c ?? null,
     change: typeof quote?.d === 'number' ? quote.d : quote?.d ?? null,
     changePercent: typeof quote?.dp === 'number' ? quote.dp : quote?.dp ?? null,
+    volume: typeof quote?.v === 'number' ? quote.v : null,
+    averageVolume: typeof quote?.avgVolume === 'number' ? quote.avgVolume : typeof quote?.avgVolume3M === 'number' ? quote.avgVolume3M : null,
+    vwap: typeof quote?.vw === 'number' ? quote.vw : null,
     preMarketPrice: preMarketPrice != null ? Number(preMarketPrice) : null,
     preMarketChange: preMarketChange != null ? Number(preMarketChange) : null,
     preMarketChangePercent: preMarketChangePercent != null ? Number(preMarketChangePercent) : null,
@@ -250,8 +292,23 @@ function mapTimeframeToBinanceInterval(timeframe) {
   }
 }
 
+function isForexPair(symbol) {
+  const normalized = (symbol || '').trim().toUpperCase();
+  if (!normalized.endsWith('USD')) return false;
+  const base = normalized.slice(0, -3);
+  return /^(EUR|GBP|JPY|AUD|CAD|CHF|NZD|CNY|SEK|NOK|MXN|ZAR|TRY|INR|KRW)$/i.test(base);
+}
+
 function isCryptoSymbol(symbol) {
-  return /^(BTC|ETH|BNB|SOL|XRP|ADA|DOGE|TRX|AVAX|LINK|DOT|LTC|NEAR|TON|SHIB|BCH|MATIC|UNI|ATOM|ICP|APT|SUI|XMR|FIL|ARB|OP|WIF|PEPE)/i.test(symbol);
+  const normalized = (symbol || '').trim().toUpperCase();
+  if (!normalized) return false;
+  if (normalized.endsWith('USDT')) {
+    return true;
+  }
+  if (normalized.endsWith('USD') && !isForexPair(normalized)) {
+    return true;
+  }
+  return /^(BTC|ETH|BNB|SOL|XRP|ADA|DOGE|TRX|AVAX|LINK|DOT|LTC|NEAR|TON|SHIB|BCH|MATIC|UNI|ATOM|ICP|APT|SUI|XMR|FIL|ARB|OP|WIF|PEPE)/i.test(normalized);
 }
 
 export async function fetchHistoricalCandles(symbol, timeframe = '1h', limit = 80, options = {}) {
@@ -259,7 +316,7 @@ export async function fetchHistoricalCandles(symbol, timeframe = '1h', limit = 8
   if (!normalizedSymbol) return null;
 
   const source = options.source ? String(options.source).toLowerCase() : null;
-  const useBinance = source === 'binance' || (source === 'auto' && isCryptoSymbol(normalizedSymbol));
+  const useBinance = source === 'binance' || isCryptoSymbol(normalizedSymbol);
   const now = Math.floor(Date.now() / 1000);
   const lookback = Math.min(Math.max(limit, 20), 500);
   const from = now - lookback * ({
@@ -276,7 +333,7 @@ export async function fetchHistoricalCandles(symbol, timeframe = '1h', limit = 8
   if (useBinance) {
     const pair = normalizedSymbol.replace(/USD$/i, 'USDT');
     const interval = mapTimeframeToBinanceInterval(timeframe);
-    const candles = await requestBinance(`/klines?symbol=${encodeURIComponent(pair)}&interval=${interval}&limit=${lookback}`);
+    const candles = await requestBinance(`/fapi/v1/klines?symbol=${encodeURIComponent(pair)}&interval=${interval}&limit=${lookback}`, { futures: true });
     if (Array.isArray(candles) && candles.length > 0) {
       return candles.map((item) => ({
         time: Math.floor(Number(item[0]) / 1000),

@@ -30,6 +30,13 @@ const FALLBACK_LABELS = {
   riskPerShare: "Risk per share",
   share: "share",
   shares: "shares",
+  screenerFilters: "Filters",
+  screenerTopGainer: "Top gainer",
+  screenerTopLoser: "Top loser",
+  screenerAnyChange: "Any change",
+  screenerGain: "Gain",
+  screenerDrop: "Drop",
+  screenerFilterPanel: "Filter panel",
   enterEntryStopRisk: "Enter entry, stop, and risk to calculate position size.",
   addNewSetup: "Add new setup…",
   tags: "Tags",
@@ -144,22 +151,37 @@ const formatStockPrice = (value, currency = "USD") => {
   }
 };
 const normalizeTicker = (value) => (value || "").trim().toUpperCase();
+function isForexPair(symbol) {
+  const normalized = normalizeTicker(symbol || "");
+  if (!normalized.endsWith("USD")) return false;
+  const base = normalized.slice(0, -3);
+  return /^(EUR|GBP|JPY|AUD|CAD|CHF|NZD|CNY|SEK|NOK|MXN|ZAR|TRY|INR|KRW)$/i.test(base);
+}
+
 function inferInstrumentType(ticker, priceValue) {
   const normalized = normalizeTicker(ticker || "");
   if (!normalized) return "stock";
-  if (/[A-Z]{2,5}/.test(normalized)) return "stock";
-  if (normalized.includes("USD") || normalized.includes("USDT") || normalized.includes("BTC") || normalized.includes("ETH")) return "crypto";
-  return priceValue != null && Number(priceValue) > 0 ? "stock" : "stock";
+  if (normalized.endsWith("USDT")) return "crypto";
+  if (normalized.endsWith("USD") && !isForexPair(normalized)) return "crypto";
+  if (normalized.includes("BTC") || normalized.includes("ETH") || normalized.includes("SOL")) return "crypto";
+  return "stock";
 }
 function inferScreenerSector(symbol) {
   const normalized = normalizeTicker(symbol || "");
   if (!normalized) return "Custom";
-  return normalized.includes("BTC") || normalized.includes("ETH") || normalized.includes("SOL") ? "Crypto" : "Custom";
+  if (normalized.endsWith("USDT")) return "Crypto";
+  if (normalized.endsWith("USD") && !isForexPair(normalized)) return "Crypto";
+  if (/^(BTC|ETH|SOL)/.test(normalized)) return "Crypto";
+  if (/^(EUR|GBP|JPY|AUD|CAD|CHF|NZD|CNY|SEK|NOK|MXN|ZAR|TRY|INR|KRW)/.test(normalized) && normalized.includes("USD")) return "FX";
+  return "Custom";
 }
 function inferScreenerInstrumentType(symbol) {
   const normalized = normalizeTicker(symbol || "");
   if (!normalized) return "stock";
-  return normalized.includes("BTC") || normalized.includes("ETH") || normalized.includes("SOL") ? "crypto" : "stock";
+  if (normalized.endsWith("USDT")) return "crypto";
+  if (normalized.endsWith("USD") && !isForexPair(normalized)) return "crypto";
+  if (/^(BTC|ETH|SOL)/.test(normalized)) return "crypto";
+  return "stock";
 }
 function resolveTradeMetrics(trade, snapshot) {
   if (!trade || trade.status !== "open") return { pnl: trade?.pnl ?? null, pnlPercent: trade?.pnlPercent ?? null, rMultiple: trade?.rMultiple ?? null };
@@ -553,6 +575,7 @@ function MiniPriceChart({ row }) {
         {Object.keys({ "1m": 1, "5m": 1, "15m": 1, "1h": 1, "4h": 1, "1d": 1, "1w": 1, "1M": 1 }).map((value) => (
           <button
             key={value}
+            type="button"
             className={cls("tj-chip", timeframe === value && "on")}
             style={{ fontSize: 11, padding: "4px 8px" }}
             onClick={() => setTimeframe(value)}
@@ -561,52 +584,144 @@ function MiniPriceChart({ row }) {
           </button>
         ))}
       </div>
-      <div ref={containerRef} style={{ width: "100%", height: 190, minWidth: 150 }} />
+      <div key={`${(row?.symbol || "").trim().toUpperCase()}-${timeframe}`} ref={containerRef} style={{ width: "100%", height: 190, minWidth: 150 }} />
       {lastVolume != null && <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 5 }}>Vol: {Math.round(lastVolume / 1000)}k</div>}
     </div>
   );
 }
 
-export function ScreenerPanel({ rows, loading, filters, setFilters, savedFilters, onSaveFilter, onApplyFilter, onRemoveFilter, onAddAlert, onRemoveAlert, alerts, filterName, setFilterName, activeFilterId, t }) {
+export function ScreenerPanel({ rows, loading, filters, setFilters, savedFilters, onSaveFilter, onApplyFilter, onRemoveFilter, filterName, setFilterName, activeFilterId, t }) {
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const labels = t || FALLBACK_LABELS;
   const sectorOptions = ["all", "Technology", "Financial", "Energy", "Consumer", "ETF", "FX", "Crypto", "Automotive", "Custom"];
   const instrumentOptions = ["all", "stock", "etf", "forex", "crypto"];
+  const changeDirectionOptions = [
+    { value: "any", label: labels.screenerAnyChange || "Any change" },
+    { value: "gain", label: labels.screenerGain || "Gain" },
+    { value: "drop", label: labels.screenerDrop || "Drop" },
+  ];
+
+  const filteredRows = useMemo(() => {
+    const threshold = Number(filters?.changeThreshold || "");
+    const vwapThreshold = Number(filters?.vwapDistance || "");
+    const relativeVolumeThreshold = Number(filters?.relativeVolume || "");
+    return (rows || [])
+      .filter((row) => {
+        const value = Number(row?.changePercent ?? row?.change ?? 0);
+        if (filters?.changeDirection === "gain") {
+          if (filters?.changeThreshold) return value >= threshold;
+          return value >= 0;
+        }
+        if (filters?.changeDirection === "drop") {
+          if (filters?.changeThreshold) return value <= -threshold;
+          return value <= 0;
+        }
+        return true;
+      })
+      .filter((row) => {
+        if (vwapThreshold && row?.vwapDistance != null) {
+          return Math.abs(row.vwapDistance) >= vwapThreshold;
+        }
+        if (vwapThreshold) {
+          return false;
+        }
+        return true;
+      })
+      .filter((row) => {
+        if (relativeVolumeThreshold && row?.relativeVolume != null) {
+          return row.relativeVolume >= relativeVolumeThreshold;
+        }
+        if (relativeVolumeThreshold) {
+          return false;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        const aValue = Number(a?.[filters?.sortBy] ?? 0);
+        const bValue = Number(b?.[filters?.sortBy] ?? 0);
+        if (Number.isNaN(aValue) || Number.isNaN(bValue)) return 0;
+        return filters?.sortDir === "asc" ? aValue - bValue : bValue - aValue;
+      });
+  }, [rows, filters]);
+
+  const displayedRows = useMemo(() => {
+    return (filteredRows || []).slice(0, 10);
+  }, [filteredRows]);
 
   return (
     <div style={{ padding: "24px 16px 100px" }}>
-      <div className="tj-card" style={{ padding: 16, marginBottom: 12 }}>
-        <div className="tj-display" style={{ fontSize: 20, fontWeight: 700, color: "var(--text)" }}>{labels.screenerTitle || "Market Screener"}</div>
-        <div style={{ marginTop: 6, fontSize: 13, color: "var(--text-dim)" }}>{labels.screenerSubtitle || "Explore instruments with a lightweight chart view."}</div>
+      <div className="tj-card" style={{ padding: 16, marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+        <div>
+          <div className="tj-display" style={{ fontSize: 20, fontWeight: 700, color: "var(--text)" }}>{labels.screenerTitle || "Market Screener"}</div>
+          <div style={{ marginTop: 6, fontSize: 13, color: "var(--text-dim)" }}>{labels.screenerSubtitle || "Explore instruments with a lightweight chart view."}</div>
+        </div>
+        <button className="tj-btn-ghost" style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 14px" }} onClick={() => setFiltersOpen((prev) => !prev)}>
+          <SlidersHorizontal size={16} />
+          {filtersOpen ? labels.screenerFilterPanel || "Hide filters" : labels.screenerFilterPanel || "Filters"}
+        </button>
       </div>
 
-      <div className="tj-card" style={{ padding: 14, marginBottom: 12 }}>
-        <div style={{ display: "grid", gap: 8 }}>
-          <input
-            className="tj-input tj-input-compact"
-            placeholder={labels.screenerSearchPlaceholder || "Search symbol or sector"}
-            value={filters?.query || ""}
-            onChange={(event) => setFilters((prev) => ({ ...prev, query: event.target.value }))}
-          />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <select className="tj-input tj-input-compact" value={filters?.sector || "all"} onChange={(event) => setFilters((prev) => ({ ...prev, sector: event.target.value }))}>
-              {sectorOptions.map((option) => <option key={option} value={option}>{option === "all" ? labels.screenerAllSectors || "All sectors" : option}</option>)}
-            </select>
-            <select className="tj-input tj-input-compact" value={filters?.instrument || "all"} onChange={(event) => setFilters((prev) => ({ ...prev, instrument: event.target.value }))}>
-              {instrumentOptions.map((option) => <option key={option} value={option}>{option === "all" ? labels.screenerAllInstruments || "All instruments" : option}</option>)}
-            </select>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-            <input className="tj-input tj-input-compact" placeholder={labels.screenerMinChange || "Min % change"} value={filters?.minChange || ""} onChange={(event) => setFilters((prev) => ({ ...prev, minChange: event.target.value }))} />
-            <input className="tj-input tj-input-compact" placeholder={labels.screenerMinVolume || "Min volume"} value={filters?.minVolume || ""} onChange={(event) => setFilters((prev) => ({ ...prev, minVolume: event.target.value }))} />
-            <input className="tj-input tj-input-compact" placeholder={labels.screenerMinPrice || "Min price"} value={filters?.minPrice || ""} onChange={(event) => setFilters((prev) => ({ ...prev, minPrice: event.target.value }))} />
+      {filtersOpen && (
+        <div className="tj-card" style={{ padding: 14, marginBottom: 12 }}>
+          <div style={{ display: "grid", gap: 12 }}>
+            <input
+              className="tj-input tj-input-compact"
+              placeholder={labels.screenerSearchPlaceholder || "Search symbol or sector"}
+              value={filters?.query || ""}
+              onChange={(event) => setFilters((prev) => ({ ...prev, query: event.target.value }))}
+            />
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <select className="tj-input tj-input-compact" value={filters?.sector || "all"} onChange={(event) => setFilters((prev) => ({ ...prev, sector: event.target.value }))}>
+                {sectorOptions.map((option) => <option key={option} value={option}>{option === "all" ? labels.screenerAllSectors || "All sectors" : option}</option>)}
+              </select>
+              <select className="tj-input tj-input-compact" value={filters?.instrument || "all"} onChange={(event) => setFilters((prev) => ({ ...prev, instrument: event.target.value }))}>
+                {instrumentOptions.map((option) => <option key={option} value={option}>{option === "all" ? labels.screenerAllInstruments || "All instruments" : option}</option>)}
+              </select>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <select className="tj-input tj-input-compact" value={filters?.changeDirection || "any"} onChange={(event) => setFilters((prev) => ({ ...prev, changeDirection: event.target.value }))}>
+                {changeDirectionOptions.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+              <input
+                className="tj-input tj-input-compact"
+                placeholder={labels.screenerMinChange || "Min % change"}
+                value={filters?.changeThreshold || ""}
+                onChange={(event) => setFilters((prev) => ({ ...prev, changeThreshold: event.target.value }))}
+              />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <input
+                className="tj-input tj-input-compact"
+                placeholder={labels.screenerVwapDistance || "VWAP distance %"}
+                value={filters?.vwapDistance || ""}
+                onChange={(event) => setFilters((prev) => ({ ...prev, vwapDistance: event.target.value }))}
+              />
+              <input
+                className="tj-input tj-input-compact"
+                placeholder={labels.screenerRelativeVolume || "Relative volume"}
+                value={filters?.relativeVolume || ""}
+                onChange={(event) => setFilters((prev) => ({ ...prev, relativeVolume: event.target.value }))}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button className={cls("tj-chip", filters?.sortDir === "desc" && filters?.sortBy === "changePercent" && "on")} onClick={() => setFilters((prev) => ({ ...prev, sortBy: "changePercent", sortDir: "desc", changeDirection: "gain" }))}>
+                {labels.screenerTopGainer || "Top gainer"}
+              </button>
+              <button className={cls("tj-chip", filters?.sortDir === "asc" && filters?.sortBy === "changePercent" && "on")} onClick={() => setFilters((prev) => ({ ...prev, sortBy: "changePercent", sortDir: "asc", changeDirection: "drop" }))}>
+                {labels.screenerTopLoser || "Top loser"}
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-        <button className="tj-btn-ghost" style={{ padding: "8px 10px" }} onClick={() => setFilters((prev) => ({ ...prev, sortBy: prev.sortBy === "changePercent" ? "price" : "changePercent", sortDir: prev.sortDir === "desc" ? "asc" : "desc" }))}>
-          {labels.screenerSortGrowth || "Sort"}
-        </button>
         <input className="tj-input tj-input-compact" style={{ maxWidth: 170 }} placeholder={labels.screenerFilterName || "Filter name"} value={filterName || ""} onChange={(event) => setFilterName(event.target.value)} />
         <button className="tj-btn-primary" style={{ padding: "8px 12px" }} onClick={() => onSaveFilter && onSaveFilter()}>{labels.screenerSaveFilter || "Save"}</button>
       </div>
@@ -624,11 +739,11 @@ export function ScreenerPanel({ rows, loading, filters, setFilters, savedFilters
 
       {loading ? (
         <div className="tj-card" style={{ padding: 20, textAlign: "center", color: "var(--text-dim)" }}>{labels.screenerLoading || "Loading screener…"}</div>
-      ) : rows?.length === 0 ? (
+      ) : displayedRows?.length === 0 ? (
         <div className="tj-card" style={{ padding: 20, textAlign: "center", color: "var(--text-dim)" }}>{labels.screenerAlertEmpty || "No instruments match the current filters."}</div>
       ) : (
         <div style={{ display: "grid", gap: 10 }}>
-          {rows.map((row) => {
+          {displayedRows.map((row) => {
             const change = Number(row?.changePercent ?? row?.change ?? 0);
             const price = Number(row?.price ?? 0);
             return (
@@ -645,10 +760,6 @@ export function ScreenerPanel({ rows, loading, filters, setFilters, savedFilters
                 </div>
                 <div style={{ marginTop: 10 }}>
                   <MiniPriceChart row={row} />
-                </div>
-                <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-                  <button className="tj-btn-ghost" style={{ padding: "7px 10px", fontSize: 12 }} onClick={() => onAddAlert && onAddAlert({ symbol: row.symbol, targetPrice: price, condition: "above" })}>{labels.screenerAlert || "Alert"}</button>
-                  <button className="tj-btn-ghost" style={{ padding: "7px 10px", fontSize: 12 }} onClick={() => onRemoveAlert && onRemoveAlert(row.symbol)}>{labels.watchlistRemove || "Remove"}</button>
                 </div>
               </div>
             );
