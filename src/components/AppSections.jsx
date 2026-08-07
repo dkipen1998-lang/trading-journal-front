@@ -425,8 +425,8 @@ function MiniPriceChart({ row }) {
     if (!containerRef.current) return;
 
     const chart = createChart(containerRef.current, {
-      width: 260,
-      height: 140,
+      width: containerRef.current.clientWidth || 260,
+      height: 200,
       layout: {
         background: { color: "transparent" },
         textColor: "#ECEEF1",
@@ -436,11 +436,11 @@ function MiniPriceChart({ row }) {
         horzLines: { color: "rgba(255,255,255,0.04)" },
       },
       timeScale: { timeVisible: true, secondsVisible: false },
-      rightPriceScale: { borderVisible: false },
-      leftPriceScale: { visible: false },
-      crosshair: { mode: 0 },
-      handleScroll: true,
-      handleScale: true,
+      rightPriceScale: { borderVisible: false, visible: true },
+      leftPriceScale: { visible: true, borderVisible: false, scaleMargins: { top: 0.82, bottom: 0 } },
+      crosshair: { mode: 1 },
+      handleScroll: { mouseWheel: true, pressedMouseMove: true },
+      handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
     });
 
     const series = chart.addCandlestickSeries({
@@ -453,8 +453,12 @@ function MiniPriceChart({ row }) {
     });
 
     const volumeSeries = chart.addHistogramSeries({
-      color: "rgba(94, 200, 216, 0.5)",
-      priceScaleId: "right",
+      color: "rgba(94, 200, 216, 0.45)",
+      priceScaleId: "left",
+      priceFormat: { type: "volume" },
+      scaleMargins: { top: 0.82, bottom: 0 },
+      priceLineVisible: false,
+      lastValueVisible: false,
     });
 
     const basePrice = Number(row?.price ?? 100);
@@ -483,7 +487,7 @@ function MiniPriceChart({ row }) {
       return { time, open, high, low, close, volume };
     });
 
-    const volumeData = points.map((point) => ({ time: point.time, value: point.volume }));
+    const volumeData = points.map((point) => ({ time: point.time, value: point.volume, color: point.close >= point.open ? "rgba(61, 220, 151, 0.6)" : "rgba(240, 85, 107, 0.6)" }));
     series.setData(points);
     volumeSeries.setData(volumeData);
     chart.timeScale().fitContent();
@@ -506,8 +510,8 @@ function MiniPriceChart({ row }) {
           </button>
         ))}
       </div>
-      <div ref={containerRef} style={{ width: "100%", height: 140, minWidth: 150 }} />
-      {lastVolume != null && <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>Vol: {Math.round(lastVolume / 1000)}k</div>}
+      <div ref={containerRef} style={{ width: "100%", height: 190, minWidth: 150 }} />
+      {lastVolume != null && <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 5 }}>Vol: {Math.round(lastVolume / 1000)}k</div>}
     </div>
   );
 }
@@ -587,11 +591,6 @@ export function ScreenerPanel({ rows, loading, filters, setFilters, savedFilters
                     <div className="tj-mono" style={{ fontSize: 14, fontWeight: 600 }}>{price ? `$${price.toFixed(2)}` : "—"}</div>
                     <div style={{ fontSize: 12, color: change >= 0 ? "var(--profit)" : "var(--loss)" }}>{change >= 0 ? "+" : ""}{change.toFixed(2)}%</div>
                   </div>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginTop: 10, fontSize: 12, color: "var(--text-dim)" }}>
-                  <div className="tj-card" style={{ padding: 8 }}><div style={{ fontSize: 10, textTransform: "uppercase" }}>{labels.screenerVol || "Volume"}</div><div className="tj-mono" style={{ marginTop: 4 }}>{row.volume ? row.volume.toLocaleString() : "—"}</div></div>
-                  <div className="tj-card" style={{ padding: 8 }}><div style={{ fontSize: 10, textTransform: "uppercase" }}>Sector</div><div className="tj-mono" style={{ marginTop: 4 }}>{row.sector || "—"}</div></div>
-                  <div className="tj-card" style={{ padding: 8 }}><div style={{ fontSize: 10, textTransform: "uppercase" }}>{labels.screenerAlert || "Alert"}</div><div className="tj-mono" style={{ marginTop: 4 }}>{row.exchange || "—"}</div></div>
                 </div>
                 <div style={{ marginTop: 10 }}>
                   <MiniPriceChart row={row} />
