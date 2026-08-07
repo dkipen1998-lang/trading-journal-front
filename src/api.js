@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'https://trading-journal-backend-eili.onrender.com/api';
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const FINNHUB_API_KEY = import.meta.env.VITE_FINNHUB_API_KEY || 'demo';
 
