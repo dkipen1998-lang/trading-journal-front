@@ -163,6 +163,86 @@ export async function fetchStockSnapshot(symbol, options = {}) {
   };
 }
 
+function mapTimeframeToFinnhubResolution(timeframe) {
+  switch (timeframe) {
+    case '1m': return '1';
+    case '5m': return '5';
+    case '15m': return '15';
+    case '1h': return '60';
+    case '4h': return '240';
+    case '1d': return 'D';
+    case '1w': return 'W';
+    case '1M': return 'M';
+    default: return '60';
+  }
+}
+
+function mapTimeframeToBinanceInterval(timeframe) {
+  switch (timeframe) {
+    case '1m': return '1m';
+    case '5m': return '5m';
+    case '15m': return '15m';
+    case '1h': return '1h';
+    case '4h': return '4h';
+    case '1d': return '1d';
+    case '1w': return '1w';
+    case '1M': return '1M';
+    default: return '1h';
+  }
+}
+
+function isCryptoSymbol(symbol) {
+  return /^(BTC|ETH|BNB|SOL|XRP|ADA|DOGE|TRX|AVAX|LINK|DOT|LTC|NEAR|TON|SHIB|BCH|MATIC|UNI|ATOM|ICP|APT|SUI|XMR|FIL|ARB|OP|WIF|PEPE)/i.test(symbol);
+}
+
+export async function fetchHistoricalCandles(symbol, timeframe = '1h', limit = 80, options = {}) {
+  const normalizedSymbol = (symbol || '').trim().toUpperCase();
+  if (!normalizedSymbol) return null;
+
+  const source = options.source ? String(options.source).toLowerCase() : null;
+  const useBinance = source === 'binance' || (source === 'auto' && isCryptoSymbol(normalizedSymbol));
+  const now = Math.floor(Date.now() / 1000);
+  const lookback = Math.min(Math.max(limit, 20), 500);
+  const from = now - lookback * ({
+    '1m': 60,
+    '5m': 300,
+    '15m': 900,
+    '1h': 3600,
+    '4h': 14400,
+    '1d': 86400,
+    '1w': 604800,
+    '1M': 2678400,
+  }[timeframe] || 3600);
+
+  if (useBinance) {
+    const pair = normalizedSymbol.replace(/USD$/i, 'USDT');
+    const interval = mapTimeframeToBinanceInterval(timeframe);
+    const candles = await requestBinance(`/klines?symbol=${encodeURIComponent(pair)}&interval=${interval}&limit=${lookback}`);
+    if (!Array.isArray(candles)) return null;
+    return candles.map((item) => ({
+      time: Math.floor(Number(item[0]) / 1000),
+      open: item[1],
+      high: item[2],
+      low: item[3],
+      close: item[4],
+      volume: item[5],
+    }));
+  }
+
+  const resolution = mapTimeframeToFinnhubResolution(timeframe);
+  const candleData = await requestFinnhub(`/stock/candle?symbol=${encodeURIComponent(normalizedSymbol)}&resolution=${resolution}&from=${from}&to=${now}`);
+  if (!candleData || candleData.s !== 'ok' || !Array.isArray(candleData.t)) return null;
+
+  return candleData.t.map((timestamp, index) => ({
+    time: Math.floor(Number(timestamp)),
+    open: candleData.o[index],
+    high: candleData.h[index],
+    low: candleData.l[index],
+    close: candleData.c[index],
+    volume: candleData.v[index],
+  }));
+}
+
 export async function loginWithTelegram(initData) {
   const result = await request('/auth/telegram', {
     method: 'POST',

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react";
 import { createChart } from "lightweight-charts";
+import { fetchHistoricalCandles } from "../api";
 import {
   Plus, Search, SlidersHorizontal, Settings, X, Edit2, Trash2, Copy, Camera,
   ChevronRight, Home, BookOpen, BarChart2, Download, Eye,
@@ -421,6 +422,34 @@ function MiniPriceChart({ row }) {
   const [timeframe, setTimeframe] = useState("1h");
   const [lastVolume, setLastVolume] = useState(null);
 
+  const generateSyntheticPoints = (rowData, timeframeKey) => {
+    const basePrice = Number(rowData?.price ?? 100);
+    const drift = Number(rowData?.changePercent ?? 0) / 100;
+    const seed = (rowData?.symbol || "AAPL").split("").reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+    const timeframes = {
+      "1m": 60_000,
+      "5m": 300_000,
+      "15m": 900_000,
+      "1h": 3_600_000,
+      "4h": 14_400_000,
+      "1d": 86_400_000,
+      "1w": 604_800_000,
+      "1M": 2_629_746_000,
+    };
+    const interval = timeframes[timeframeKey] || timeframes["1h"];
+    return Array.from({ length: 42 }, (_, index) => {
+      const time = Math.floor((Date.now() - (41 - index) * interval) / 1000);
+      const trend = (index / 41 - 0.5) * 0.08 + drift * 0.04;
+      const wave = Math.sin((index + seed) / 3.2) * 0.012;
+      const open = basePrice * (1 + trend + wave);
+      const close = open * (1 + Math.sin((index + seed) / 5.4) * 0.014 + drift * 0.01);
+      const high = Math.max(open, close) * (1 + Math.abs(Math.cos((index + seed) / 4.6)) * 0.008 + 0.004);
+      const low = Math.min(open, close) * (1 - Math.abs(Math.sin((index + seed) / 4.2)) * 0.008 - 0.004);
+      const volume = Math.round((900000 + (index % 7) * 180000 + Math.abs(Math.sin((index + seed) / 3)) * 650000) * (1 + Math.max(0, drift) * 1.2));
+      return { time, open, high, low, close, volume };
+    });
+  };
+
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -461,40 +490,62 @@ function MiniPriceChart({ row }) {
       lastValueVisible: false,
     });
 
-    const basePrice = Number(row?.price ?? 100);
-    const drift = Number(row?.changePercent ?? 0) / 100;
-    const seed = (row?.symbol || "AAPL").split("").reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
-    const timeframes = {
-      "1m": 60_000,
-      "5m": 300_000,
-      "15m": 900_000,
-      "1h": 3_600_000,
-      "4h": 14_400_000,
-      "1d": 86_400_000,
-      "1w": 604_800_000,
-      "1M": 2_629_746_000,
+    let cancelled = false;
+
+    const loadCandles = async () => {
+      const symbol = (row?.symbol || "").trim().toUpperCase();
+      if (!symbol) {
+        const synthetic = generateSyntheticPoints(row, timeframe);
+        series.setData(synthetic);
+        volumeSeries.setData(synthetic.map((point) => ({
+          time: point.time,
+          value: point.volume,
+          color: point.close >= point.open ? "rgba(61, 220, 151, 0.6)" : "rgba(240, 85, 107, 0.6)",
+        })));
+        chart.timeScale().fitContent();
+        setLastVolume(synthetic[synthetic.length - 1]?.volume ?? null);
+        return;
+      }
+
+      let points = null;
+      try {
+        const source = row?.instrumentType === "crypto" ? "binance" : "auto";
+        const candles = await fetchHistoricalCandles(symbol, timeframe, 80, { source });
+        if (Array.isArray(candles) && candles.length > 0) {
+          points = candles.map((item) => ({
+            time: typeof item.time === "string" ? item.time : Math.floor(Number(item.time) / 1000),
+            open: Number(item.open),
+            high: Number(item.high),
+            low: Number(item.low),
+            close: Number(item.close),
+            volume: Number(item.volume),
+          }));
+        }
+      } catch {
+        points = null;
+      }
+
+      if (!points || !points.length) {
+        points = generateSyntheticPoints(row, timeframe);
+      }
+
+      if (cancelled) return;
+      series.setData(points);
+      volumeSeries.setData(points.map((point) => ({
+        time: point.time,
+        value: point.volume,
+        color: point.close >= point.open ? "rgba(61, 220, 151, 0.6)" : "rgba(240, 85, 107, 0.6)",
+      })));
+      chart.timeScale().fitContent();
+      setLastVolume(points[points.length - 1]?.volume ?? null);
     };
-    const interval = timeframes[timeframe] || timeframes["1h"];
-    const points = Array.from({ length: 42 }, (_, index) => {
-      const time = Math.floor((Date.now() - (41 - index) * interval) / 1000);
-      const trend = (index / 41 - 0.5) * 0.08 + drift * 0.04;
-      const wave = Math.sin((index + seed) / 3.2) * 0.012;
-      const open = basePrice * (1 + trend + wave);
-      const close = open * (1 + Math.sin((index + seed) / 5.4) * 0.014 + drift * 0.01);
-      const high = Math.max(open, close) * (1 + Math.abs(Math.cos((index + seed) / 4.6)) * 0.008 + 0.004);
-      const low = Math.min(open, close) * (1 - Math.abs(Math.sin((index + seed) / 4.2)) * 0.008 - 0.004);
-      const volume = Math.round((900000 + (index % 7) * 180000 + Math.abs(Math.sin((index + seed) / 3)) * 650000) * (1 + Math.max(0, drift) * 1.2));
-      return { time, open, high, low, close, volume };
-    });
 
-    const volumeData = points.map((point) => ({ time: point.time, value: point.volume, color: point.close >= point.open ? "rgba(61, 220, 151, 0.6)" : "rgba(240, 85, 107, 0.6)" }));
-    series.setData(points);
-    volumeSeries.setData(volumeData);
-    chart.timeScale().fitContent();
-    setLastVolume(points[points.length - 1]?.volume ?? null);
-
-    return () => chart.remove();
-  }, [row?.symbol, row?.price, row?.changePercent, timeframe]);
+    loadCandles();
+    return () => {
+      cancelled = true;
+      chart.remove();
+    };
+  }, [row?.symbol, row?.price, row?.changePercent, row?.instrumentType, timeframe]);
 
   return (
     <div>
