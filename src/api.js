@@ -544,21 +544,34 @@ function normalizeTradeCollection(payload) {
 export async function fetchTrades(profileId) {
   const query = profileId ? `?profileId=${encodeURIComponent(profileId)}` : '';
   const token = getToken();
-  const shouldUseLocalFallback = !token && import.meta.env.DEV;
-  if (shouldUseLocalFallback) {
-    const trades = readLocalTrades();
-    return profileId ? trades.filter((trade) => trade.profileId === profileId) : trades;
+  const localTrades = readLocalTrades();
+  if (!token) {
+    return profileId ? localTrades.filter((trade) => trade.profileId === profileId) : localTrades;
   }
 
-  const response = await request(`/trades${query}`);
-  return normalizeTradeCollection(response);
+  try {
+    const response = await request(`/trades${query}`);
+    const normalized = normalizeTradeCollection(response);
+    if (normalized.length > 0) {
+      return normalized;
+    }
+    return localTrades;
+  } catch {
+    return localTrades;
+  }
 }
 
 export async function fetchProfiles() {
-  if (hasToken()) {
-    return request('/profiles');
+  if (!hasToken()) {
+    return readLocalProfiles();
   }
-  return readLocalProfiles();
+
+  try {
+    const response = await request('/profiles');
+    return Array.isArray(response) ? response : readLocalProfiles();
+  } catch {
+    return readLocalProfiles();
+  }
 }
 
 export async function createProfile(profile) {

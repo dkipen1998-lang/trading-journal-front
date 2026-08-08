@@ -1562,7 +1562,9 @@ export default function TradingJournalApp() {
           }
         }
 
-        if (typeof window !== "undefined" && window.localStorage.getItem("tj_token")) {
+        const hasStoredToken = Boolean(typeof window !== "undefined" ? window.localStorage.getItem("tj_token") : "");
+        const hasStoredLocalData = Boolean(typeof window !== "undefined" ? (window.localStorage.getItem("tj-trades") || window.localStorage.getItem("tj-profiles")) : "");
+        if (typeof window !== "undefined" && (hasStoredToken || hasStoredLocalData)) {
           const localTrades = JSON.parse(window.localStorage.getItem("tj-trades") || "[]");
           const localProfiles = JSON.parse(window.localStorage.getItem("tj-profiles") || "[]");
 
