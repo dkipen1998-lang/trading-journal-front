@@ -2330,16 +2330,44 @@ export default function TradingJournalApp() {
         <div style={{ padding: "10px 16px 0" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            {user?.photoUrl ? (
-              <img
-                src={user.photoUrl}
-                alt={user?.firstName || user?.username || "User"}
-                style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover", border: "1px solid var(--border)" }}
-              />
-            ) : null}
-            <button className="tj-chip" onClick={isAuthenticated ? handleLogout : handleTelegramLogin} disabled={authLoading}>
-              {isAuthenticated ? (t.logout || "Logout") : (t.login || "Login")}
-            </button>
+            {user ? (
+              <>
+                {user.photoUrl ? (
+                  <img
+                    src={user.photoUrl}
+                    alt={user?.firstName || user?.username || "User"}
+                    style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover", border: "1px solid var(--border)" }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: "50%",
+                      background: "var(--border)",
+                      display: "grid",
+                      placeItems: "center",
+                      color: "var(--text)",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {(user.firstName || user.username || "U").charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>
+                    {user.firstName || user.username || "User"}
+                  </span>
+                  <button className="tj-chip" onClick={isAuthenticated ? handleLogout : handleTelegramLogin} disabled={authLoading}>
+                    {isAuthenticated ? (t.logout || "Logout") : (t.login || "Login")}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <button className="tj-chip" onClick={handleTelegramLogin} disabled={authLoading}>
+                {t.login || "Login"}
+              </button>
+            )}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <button className={cls("tj-chip", language === "en" && "on")} onClick={() => setLanguage("en")}>EN</button>
