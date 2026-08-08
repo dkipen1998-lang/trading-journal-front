@@ -1849,6 +1849,11 @@ export default function TradingJournalApp() {
       const vwap = snapshot?.vwap ?? null;
       const volume = snapshot?.volume ?? null;
       const avgVolume = snapshot?.averageVolume ?? null;
+      let logo = snapshot?.logo || "";
+      if (!logo && source === "binance") {
+        const fallbackSnapshot = await fetchStockSnapshot(querySymbol, { source: "finnhub" });
+        logo = fallbackSnapshot?.logo || logo;
+      }
       const newRow = {
         symbol: querySymbol,
         name: snapshot?.name || querySymbol,
@@ -1868,7 +1873,7 @@ export default function TradingJournalApp() {
         preMarketPrice: snapshot?.preMarketPrice ?? null,
         preMarketChange: snapshot?.preMarketChange ?? null,
         preMarketChangePercent: snapshot?.preMarketChangePercent ?? null,
-        logo: snapshot?.logo || "",
+        logo,
       };
       setScreenerRows((prev) => {
         const queryKey = canonicalizeTicker(querySymbol);
@@ -1933,6 +1938,10 @@ export default function TradingJournalApp() {
           const snapshot = await fetchStockSnapshot(symbol, { source });
           if (!cancelled && snapshot) {
             let logo = snapshot.logo || "";
+            if (!logo && source === "binance") {
+              const fallbackSnapshot = await fetchStockSnapshot(symbol, { source: "finnhub" });
+              logo = fallbackSnapshot?.logo || logo;
+            }
             // try to fetch a CoinGecko icon for crypto symbols when snapshot has no logo
             try {
               if (!logo) {

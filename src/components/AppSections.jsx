@@ -9,7 +9,7 @@ function formatNumber(value, decimals = 2) {
 }
 import {
   Plus, Search, SlidersHorizontal, Settings, X, Edit2, Trash2, Copy, Camera,
-  ChevronRight, Home, BookOpen, BarChart2, Download, Eye,
+  ChevronRight, Home, BookOpen, BarChart2, Download, Eye, Send,
   ArrowUpRight, ArrowDownRight
 } from "lucide-react";
 
@@ -515,7 +515,7 @@ export function ChatScreen({ t }) {
   return (
     <div style={{ paddingBottom: 100 }}>
       <div style={{ padding: "18px 16px 0", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-        <div className="tj-display" style={{ fontSize: 20, fontWeight: 700 }}>{labels.chat || labels.news || "AI Chat"}</div>
+        <div className="tj-display" style={{ fontSize: 20, fontWeight: 700 }}>{labels.chat || "AI Chat"}</div>
       </div>
 
       <div className="tj-card" style={{ margin: "12px 16px", padding: 14 }}>
@@ -548,10 +548,10 @@ export function ChatScreen({ t }) {
 
         {error && <div style={{ color: "var(--loss)", marginTop: 10 }}>{error}</div>}
 
-        <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ marginTop: 16, position: 'relative' }}>
           <textarea
             className="tj-input"
-            rows={4}
+            rows={2}
             placeholder={labels.messagePlaceholder || "Ask ChatGPT about trading..."}
             value={input}
             onChange={(event) => setInput(event.target.value)}
@@ -561,10 +561,28 @@ export function ChatScreen({ t }) {
                 sendMessage();
               }
             }}
-            style={{ width: '100%', resize: 'vertical' }}
+            style={{ width: '100%', resize: 'none', paddingRight: 48, minHeight: 52 }}
           />
-          <button className="tj-btn-primary" onClick={sendMessage} disabled={loading || !input.trim()}>
-            {loading ? labels.sending || 'Sending...' : labels.sendMessage || 'Send'}
+          <button
+            type="button"
+            className="tj-btn-primary"
+            onClick={sendMessage}
+            disabled={loading || !input.trim()}
+            style={{
+              position: 'absolute',
+              right: 8,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              padding: 8,
+              minWidth: 38,
+              minHeight: 38,
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {loading ? <div style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.4)', borderTopColor: 'white', borderRadius: '50%', animation: 'tj-spin 1s linear infinite' }} /> : <Send size={16} />}
           </button>
         </div>
       </div>

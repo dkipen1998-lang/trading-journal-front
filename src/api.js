@@ -288,6 +288,11 @@ export async function fetchStockSnapshot(symbol, options = {}) {
   if (isCrypto || preferredSource === 'binance') {
     const pair = normalizedSymbol.replace(/USD$/i, 'USDT');
     const quote = await requestBinance(`/fapi/v1/ticker/24hr?symbol=${encodeURIComponent(pair)}`, { futures: true });
+    let logo = '';
+    if (preferredSource === 'binance') {
+      const fallbackProfile = await requestFinnhub(`/profile?symbol=${encodeURIComponent(normalizedSymbol)}`);
+      logo = fallbackProfile?.logo || '';
+    }
     return {
       price: typeof quote?.lastPrice === 'string' ? Number(quote.lastPrice) : null,
       change: typeof quote?.priceChange === 'string' ? Number(quote.priceChange) : null,
@@ -295,7 +300,7 @@ export async function fetchStockSnapshot(symbol, options = {}) {
       volume: typeof quote?.volume === 'string' ? Number(quote.volume) : null,
       averageVolume: null,
       vwap: typeof quote?.weightedAvgPrice === 'string' ? Number(quote.weightedAvgPrice) : null,
-      logo: '',
+      logo,
       exchange: 'Binance Futures',
       currency: 'USDT',
       name: normalizedSymbol,
