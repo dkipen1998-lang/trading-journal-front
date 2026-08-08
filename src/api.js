@@ -41,6 +41,12 @@ export function clearToken() {
   localStorage.removeItem('tj_user');
 }
 
+export function clearAuthSession() {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem('tj_token');
+  window.localStorage.removeItem('tj_user');
+}
+
 function readLocalProfiles() {
   if (typeof window === 'undefined') return [];
   try {

@@ -36,6 +36,50 @@ const STORAGE = typeof window !== "undefined" && window.storage
 
 const STANDARD_PROFILE_ID = "__standard__";
 
+function normalizeProfileList(items) {
+  if (!Array.isArray(items)) return [];
+  return items.filter(Boolean);
+}
+
+function normalizeTradeList(items) {
+  if (!Array.isArray(items)) return [];
+  return items.filter(Boolean);
+}
+
+function mergeProfilesByIdentity(localProfiles, remoteProfiles) {
+  const merged = [];
+  const seen = new Set();
+
+  const addProfile = (profile) => {
+    if (!profile || (!profile.id && !profile.name)) return;
+    const identity = profile.id ? `id:${profile.id}` : `name:${String(profile.name || "").trim().toLowerCase()}`;
+    if (seen.has(identity)) return;
+    seen.add(identity);
+    merged.push(profile);
+  };
+
+  normalizeProfileList(remoteProfiles).forEach(addProfile);
+  normalizeProfileList(localProfiles).forEach(addProfile);
+  return merged;
+}
+
+function mergeTradesByIdentity(localTrades, remoteTrades) {
+  const merged = [];
+  const seen = new Set();
+
+  const addTrade = (trade) => {
+    if (!trade || (!trade.id && !trade.ticker)) return;
+    const identity = trade.id ? `id:${trade.id}` : `key:${String(trade.ticker || "").trim().toLowerCase()}|${trade.entryDate || ""}|${trade.entryTime || ""}|${trade.entryPrice ?? ""}`;
+    if (seen.has(identity)) return;
+    seen.add(identity);
+    merged.push(trade);
+  };
+
+  normalizeTradeList(remoteTrades).forEach(addTrade);
+  normalizeTradeList(localTrades).forEach(addTrade);
+  return merged;
+}
+
 function TelegramIcon() {
   return (
     <svg viewBox="0 0 240 240" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -61,6 +105,26 @@ function getTelegramInitData() {
   ];
 
   return candidates.find((value) => typeof value === "string" && value.trim())?.trim() || "";
+}
+
+function getUserSettingsStorageKey(userId) {
+  const normalizedUserId = (userId || "").trim();
+  return normalizedUserId ? `tj-user-settings-${normalizedUserId}` : "tj-user-settings";
+}
+
+function readUserSettings(userId) {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(getUserSettingsStorageKey(userId));
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeUserSettings(userId, settings) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(getUserSettingsStorageKey(userId), JSON.stringify(settings));
 }
 
 const LANGUAGE_LABELS = {
@@ -1238,12 +1302,21 @@ export default function TradingJournalApp() {
   const [editTrade, setEditTrade] = useState(null);
   const [search, setSearch] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
-  const [filters, setFilters] = useState({ status: "all", side: "all", result: "all", setup: "all", tag: "all" });
-  const [incomePeriod, setIncomePeriod] = useState("30d");
+  const [filters, setFilters] = useState(() => {
+    if (typeof window === "undefined") return { status: "all", side: "all", result: "all", setup: "all", tag: "all" };
+    const saved = readUserSettings(getUser()?.id)?.filters;
+    return saved || { status: "all", side: "all", result: "all", setup: "all", tag: "all" };
+  });
+  const [incomePeriod, setIncomePeriod] = useState(() => {
+    if (typeof window === "undefined") return "30d";
+    const saved = readUserSettings(getUser()?.id)?.incomePeriod;
+    return saved || "30d";
+  });
   const [defaultRiskPerTrade, setDefaultRiskPerTrade] = useState(() => {
     if (typeof window === "undefined") return "";
     try {
-      return window.localStorage.getItem("tj-default-risk") || "";
+      const saved = readUserSettings(getUser()?.id)?.defaultRiskPerTrade;
+      return saved != null ? String(saved) : (window.localStorage.getItem("tj-default-risk") || "");
     } catch {
       return "";
     }
@@ -1266,7 +1339,8 @@ export default function TradingJournalApp() {
   const saveInFlightRef = useRef(false);
   const [language, setLanguage] = useState(() => {
     if (typeof window === "undefined") return "en";
-    return window.localStorage.getItem("tj-language") || "en";
+    const saved = readUserSettings(getUser()?.id)?.language;
+    return saved || window.localStorage.getItem("tj-language") || "en";
   });
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
@@ -1408,6 +1482,8 @@ export default function TradingJournalApp() {
   const [standardProfile, setStandardProfile] = useState(() => {
     if (typeof window === "undefined") return { name: "", defaultRiskPerTrade: "", accountSize: "" };
     try {
+      const saved = readUserSettings(getUser()?.id)?.standardProfile;
+      if (saved) return saved;
       const raw = window.localStorage.getItem("tj-standard-profile");
       return raw ? JSON.parse(raw) : { name: "", defaultRiskPerTrade: "", accountSize: "" };
     } catch {
@@ -1416,7 +1492,8 @@ export default function TradingJournalApp() {
   });
   const [activeProfileId, setActiveProfileId] = useState(() => {
     if (typeof window === "undefined") return "";
-    return window.localStorage.getItem("tj-active-profile") || "";
+    const saved = readUserSettings(getUser()?.id)?.activeProfileId;
+    return saved != null ? saved : (window.localStorage.getItem("tj-active-profile") || "");
   });
   const [profileName, setProfileName] = useState("");
   const [profileRisk, setProfileRisk] = useState("");
@@ -1455,6 +1532,7 @@ export default function TradingJournalApp() {
     clearToken();
     setIsAuthenticated(false);
     setUser(null);
+    setProfileMenuOpen(false);
   };
 
   useEffect(() => {
@@ -1491,8 +1569,11 @@ export default function TradingJournalApp() {
           const normalizedRemoteTrades = Array.isArray(remoteTradesResponse) ? remoteTradesResponse : [];
           const normalizedRemoteProfiles = Array.isArray(remoteProfilesResponse) ? remoteProfilesResponse : [];
 
-          if (Array.isArray(normalizedRemoteTrades) && normalizedRemoteTrades.length > 0) {
-            setTrades(normalizedRemoteTrades);
+          const mergedProfiles = mergeProfilesByIdentity(localProfiles, normalizedRemoteProfiles);
+          const mergedTrades = mergeTradesByIdentity(localTrades, normalizedRemoteTrades);
+
+          if (mergedTrades.length > 0) {
+            setTrades(mergedTrades);
           } else if (localTrades.length > 0) {
             await Promise.all(localTrades.map((trade) => createTrade(trade)));
             const [syncedTrades] = await Promise.all([fetchTrades(activeProfileId)]);
@@ -1500,8 +1581,8 @@ export default function TradingJournalApp() {
             setTrades(syncedItems);
           }
 
-          if (Array.isArray(normalizedRemoteProfiles) && normalizedRemoteProfiles.length > 0) {
-            setProfiles(normalizedRemoteProfiles);
+          if (mergedProfiles.length > 0) {
+            setProfiles(mergedProfiles);
           } else if (localProfiles.length > 0) {
             await Promise.all(localProfiles.map((profile) => createProfile(profile)));
             const syncedProfiles = await fetchProfiles();
@@ -1907,6 +1988,21 @@ export default function TradingJournalApp() {
       window.localStorage.setItem("tj-default-risk", defaultRiskPerTrade);
     }
   }, [defaultRiskPerTrade]);
+
+  useEffect(() => {
+    const currentUserId = user?.id || getUser()?.id || null;
+    if (!currentUserId) return;
+
+    writeUserSettings(currentUserId, {
+      language,
+      defaultRiskPerTrade,
+      incomePeriod,
+      filters,
+      tab,
+      activeProfileId,
+      standardProfile,
+    });
+  }, [user?.id, language, defaultRiskPerTrade, incomePeriod, filters, tab, activeProfileId, standardProfile]);
 
   // Keep global dark background to match app
   useEffect(() => {
