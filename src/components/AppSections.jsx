@@ -1167,7 +1167,16 @@ export function CloseTradeForm({ trade, onClose, onSubmit, t }) {
   const fileRef = useRef();
   const labels = t || FALLBACK_LABELS;
   function setValue(key, value) { setForm((prev) => ({ ...prev, [key]: value })); }
-  useEffect(() => { if (!form.exitPrice) return; const { pnl, pnlPct, r } = calcPnl({ ...trade, exitPrice: form.exitPrice }); setForm((prev) => ({ ...prev, pnl: pnl != null ? +pnl.toFixed(2) : "", pnlPercent: pnlPct != null ? +pnlPct.toFixed(2) : "", rMultiple: r != null ? +r.toFixed(2) : "" })); }, [form.exitPrice]);
+  useEffect(() => {
+    if (!form.exitPrice) return;
+    const { pnl, pnlPct, r } = calcPnl({ ...trade, exitPrice: form.exitPrice });
+    setForm((prev) => ({
+      ...prev,
+      pnl: pnl != null && Number.isFinite(pnl) ? +pnl.toFixed(2) : "",
+      pnlPercent: pnlPct != null && Number.isFinite(pnlPct) ? +pnlPct.toFixed(2) : "",
+      rMultiple: r != null && Number.isFinite(r) ? +r.toFixed(2) : "",
+    }));
+  }, [form.exitPrice]);
   function onImage(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => setValue("exitScreenshot", reader.result); reader.readAsDataURL(file); }
   return (
     <div className="tj-sheet-backdrop" onClick={onClose}>

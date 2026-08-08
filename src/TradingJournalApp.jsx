@@ -1028,7 +1028,10 @@ function createTradeChartScreenshot(trade, closeData = {}) {
 
   const minValue = Math.min(...values) - Math.max((Math.max(...values) - Math.min(...values)) * 0.15, 1);
   const maxValue = Math.max(...values) + Math.max((Math.max(...values) - Math.min(...values)) * 0.15, 1);
-  const mapPrice = (value) => paddingY + ((maxValue - value) / (maxValue - minValue)) * (height - paddingY * 2);
+  const valueRange = maxValue - minValue;
+  if (!Number.isFinite(valueRange) || valueRange === 0) return null;
+
+  const mapPrice = (value) => paddingY + ((maxValue - value) / valueRange) * (height - paddingY * 2);
   const entryY = mapPrice(entryPrice);
   const exitY = mapPrice(exitPrice);
   const points = [
