@@ -78,9 +78,39 @@ function generateId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function getFallbackUser() {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const webAppUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+    if (webAppUser) {
+      return {
+        id: webAppUser.id,
+        username: webAppUser.username,
+        firstName: webAppUser.first_name || webAppUser.firstName,
+        photoUrl: webAppUser.photo_url || webAppUser.photoUrl,
+      };
+    }
+
+    const storedUser = JSON.parse(window.localStorage.getItem('tj_user') || 'null');
+    if (storedUser) {
+      return storedUser;
+    }
+  } catch {
+    // ignore and fall back to null
+  }
+
+  return null;
+}
+
 async function request(path, options = {}) {
   const token = getToken();
-  const shouldUseLocalFallback = !token && import.meta.env.DEV && path !== '/news/latest';
+  const isAuthLoginRequest = path === '/auth/telegram' || path === '/auth/login';
+  const shouldUseLocalFallback = !token && import.meta.env.DEV && path !== '/news/latest' && !isAuthLoginRequest;
+
+  if (typeof window !== 'undefined' && (path === '/auth/telegram' || path === '/auth/login')) {
+    console.info('[auth] sending request', { path, body: options.body });
+  }
 
   if (shouldUseLocalFallback) {
     if (options.method && options.method !== 'GET') {
@@ -101,13 +131,25 @@ async function request(path, options = {}) {
   });
 
   const text = await response.text();
-  const data = text ? JSON.parse(text) : null;
+  if (typeof window !== 'undefined' && (path === '/auth/telegram' || path === '/auth/login')) {
+    console.info('[auth] response', { path, status: response.status, body: text });
+  }
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = null;
+  }
 
   if (!response.ok) {
     if ((response.status === 401 || response.status === 403) && !token) {
       return null;
     }
-    throw new Error(data?.message || data?.error || 'Request failed');
+    const errorMessage = data?.message || data?.error || 'Request failed';
+    if (typeof window !== 'undefined' && (path === '/auth/telegram' || path === '/auth/login')) {
+      console.error('[auth] request failed', { path, status: response.status, errorMessage, body: text });
+    }
+    throw new Error(errorMessage);
   }
 
   return data;
@@ -434,19 +476,37 @@ export async function fetchHistoricalCandles(symbol, timeframe = '1h', limit = 8
 }
 
 export async function loginWithTelegram(initData) {
-  const result = await request('/auth/telegram', {
-    method: 'POST',
-    body: JSON.stringify({ initData }),
-  });
+  try {
+    const result = await request('/auth/telegram', {
+      method: 'POST',
+      body: JSON.stringify({ initData }),
+    });
 
-  const token = result?.token || result?.access_token || '';
-  if (token) {
-    setToken(token);
+    const token = result?.token || result?.access_token || '';
+    const user = result?.user || getFallbackUser();
+    if (token) {
+      setToken(token);
+    }
+    if (user) {
+      setUser(user);
+    }
+    return result || { user };
+  } catch (error) {
+    const fallbackUser = getFallbackUser();
+    if (typeof window !== 'undefined') {
+      console.error('[auth] loginWithTelegram threw', error);
+    }
+    if (fallbackUser) {
+      setUser(fallbackUser);
+      return {
+        user: fallbackUser,
+        fallback: true,
+        error: error?.message || 'Login failed',
+      };
+    }
+
+    throw error;
   }
-  if (result?.user) {
-    setUser(result.user);
-  }
-  return result;
 }
 
 export async function fetchTrades(profileId) {
