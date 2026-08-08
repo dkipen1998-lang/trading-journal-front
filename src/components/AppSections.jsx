@@ -655,7 +655,7 @@ function MiniPriceChart({ row }) {
 
       let points = null;
       const useBinance = row?.instrumentType === "crypto";
-      const primarySource = useBinance ? "binance" : "yahoo";
+      const primarySource = useBinance ? "binance" : "finnhub";
 
       try {
         const candles = await fetchHistoricalCandles(symbol, timeframe, 80, { source: primarySource });
