@@ -2516,7 +2516,8 @@ export default function TradingJournalApp() {
                     style={{
                       position: "absolute",
                       top: 48,
-                      right: 0,
+                      left: 0,
+                      right: "auto",
                       minWidth: 180,
                       borderRadius: 12,
                       background: "var(--surface-2)",
