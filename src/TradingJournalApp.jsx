@@ -19,20 +19,53 @@ import {
   TickerTape,
 } from "./components/AppSections";
 
-const STORAGE = typeof window !== "undefined" && window.storage
-  ? window.storage
-  : {
+const STORAGE = (() => {
+  if (typeof window === "undefined") {
+    return {
+      get: async () => null,
+      set: async () => true,
+    };
+  }
+
+  const storage = window.storage;
+  if (storage && typeof storage.get === "function" && typeof storage.set === "function") {
+    return {
       get: async (key) => {
-        const raw = typeof window !== "undefined" ? window.localStorage.getItem(key) : null;
-        return raw == null ? null : { value: raw };
+        try {
+          const result = storage.get(key);
+          if (result && typeof result.then === "function") {
+            return result;
+          }
+          return result == null ? null : { value: result };
+        } catch {
+          return null;
+        }
       },
       set: async (key, value) => {
-        if (typeof window !== "undefined") {
-          window.localStorage.setItem(key, value);
+        try {
+          const result = storage.set(key, value);
+          if (result && typeof result.then === "function") {
+            await result;
+          }
+          return true;
+        } catch {
+          return false;
         }
-        return true;
       },
     };
+  }
+
+  return {
+    get: async (key) => {
+      const raw = window.localStorage.getItem(key);
+      return raw == null ? null : { value: raw };
+    },
+    set: async (key, value) => {
+      window.localStorage.setItem(key, value);
+      return true;
+    },
+  };
+})();
 
 const STANDARD_PROFILE_ID = "__standard__";
 
