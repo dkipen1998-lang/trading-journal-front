@@ -895,18 +895,19 @@ const STYLE = `
 .tj-sheet-backdrop {
   position: fixed; inset: 0; background: rgba(0,0,0,0.75);
   z-index: 100; display: flex; align-items: flex-end; justify-content: center; padding: 16px;
+  overflow-y: auto;
 }
 .tj-sheet {
-  position: fixed; left: 0; right: 0; bottom: 0;
+  position: relative; width: 100%; max-width: 520px;
   background: var(--surface);
   color: var(--text);
-  width: 100%; max-width: 520px;
   border-radius: 20px 20px 0 0;
   max-height: 92vh;
   overflow-y: auto;
   border: 1px solid var(--border);
   border-bottom: none;
   box-shadow: 0 -16px 44px rgba(0,0,0,0.5);
+  z-index: 101;
 }
 .tj-scroll-hide::-webkit-scrollbar { display: none; }
 .tj-chip {
@@ -2410,6 +2411,7 @@ export default function TradingJournalApp() {
       setProfileRisk("");
       setProfileAccountSize("");
       setEditingProfileId("");
+      setProfileModalOpen(false);
     } catch (error) {
       console.error(error);
       showToast(error?.message || 'Could not save profile');
