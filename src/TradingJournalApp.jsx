@@ -893,20 +893,20 @@ const STYLE = `
   display: inline-flex; align-items: center; gap: 3px;
 }
 .tj-sheet-backdrop {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.6);
-  z-index: 50; display: flex; align-items: flex-end; justify-content: center;
+  position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+  z-index: 100; display: flex; align-items: flex-end; justify-content: center; padding: 16px;
 }
 .tj-sheet {
-  /* sheet should contrast with the page background so its contents are visible
-     use surface color and ensure text color is applied (fixes blank/black sheet) */
+  position: fixed; left: 0; right: 0; bottom: 0;
   background: var(--surface);
   color: var(--text);
-  width: 100%; max-width: 420px;
+  width: 100%; max-width: 520px;
   border-radius: 20px 20px 0 0;
   max-height: 92vh;
   overflow-y: auto;
   border: 1px solid var(--border);
   border-bottom: none;
+  box-shadow: 0 -16px 44px rgba(0,0,0,0.5);
 }
 .tj-scroll-hide::-webkit-scrollbar { display: none; }
 .tj-chip {
