@@ -512,6 +512,12 @@ export async function loginWithTelegram(initData) {
   }
 }
 
+function normalizeTradeCollection(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (payload && Array.isArray(payload.items)) return payload.items;
+  return [];
+}
+
 export async function fetchTrades(profileId) {
   const query = profileId ? `?profileId=${encodeURIComponent(profileId)}` : '';
   const token = getToken();
@@ -520,7 +526,9 @@ export async function fetchTrades(profileId) {
     const trades = readLocalTrades();
     return profileId ? trades.filter((trade) => trade.profileId === profileId) : trades;
   }
-  return request(`/trades${query}`);
+
+  const response = await request(`/trades${query}`);
+  return normalizeTradeCollection(response);
 }
 
 export async function fetchProfiles() {

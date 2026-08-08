@@ -1488,7 +1488,7 @@ export default function TradingJournalApp() {
             fetchTrades(activeProfileId),
             fetchProfiles(),
           ]);
-          const normalizedRemoteTrades = remoteTradesResponse?.items || remoteTradesResponse || [];
+          const normalizedRemoteTrades = Array.isArray(remoteTradesResponse) ? remoteTradesResponse : [];
           const normalizedRemoteProfiles = Array.isArray(remoteProfilesResponse) ? remoteProfilesResponse : [];
 
           if (Array.isArray(normalizedRemoteTrades) && normalizedRemoteTrades.length > 0) {
@@ -1496,8 +1496,8 @@ export default function TradingJournalApp() {
           } else if (localTrades.length > 0) {
             await Promise.all(localTrades.map((trade) => createTrade(trade)));
             const [syncedTrades] = await Promise.all([fetchTrades(activeProfileId)]);
-            const syncedItems = syncedTrades?.items || syncedTrades || [];
-            setTrades(Array.isArray(syncedItems) ? syncedItems : []);
+            const syncedItems = Array.isArray(syncedTrades) ? syncedTrades : [];
+            setTrades(syncedItems);
           }
 
           if (Array.isArray(normalizedRemoteProfiles) && normalizedRemoteProfiles.length > 0) {
@@ -2154,11 +2154,13 @@ export default function TradingJournalApp() {
         rMultiple: data.rMultiple !== "" && data.rMultiple != null ? Number(data.rMultiple) : (r != null ? +r.toFixed(2) : null),
       };
       const updated = await closeTrade(id, payload);
-      if (updated && typeof updated === "object" && updated.id) {
-        setTrades((prev) => prev.map((item) => (item.id === id ? updated : item)));
-      } else {
-        setTrades((prev) => prev.map((item) => (item.id === id ? { ...item, ...payload, status: "closed" } : item)));
-      }
+      const nextTrade = {
+        ...trade,
+        ...payload,
+        ...(updated && typeof updated === "object" && updated.id ? updated : {}),
+        status: "closed",
+      };
+      setTrades((prev) => prev.map((item) => (item.id === id ? nextTrade : item)));
       setCloseId(null);
       setDetailId(null);
       showToast(t.tradeClosed);
@@ -2168,13 +2170,14 @@ export default function TradingJournalApp() {
       if (trade) {
         const merged = { ...trade, ...data };
         const { pnl, pnlPct, r } = calcPnl(merged);
-        updateTradeById(id, {
+        const fallbackPayload = {
           ...data,
           status: "closed",
           pnl: data.pnl !== "" && data.pnl != null ? Number(data.pnl) : (pnl != null ? +pnl.toFixed(2) : null),
           pnlPercent: data.pnlPercent !== "" && data.pnlPercent != null ? Number(data.pnlPercent) : (pnlPct != null ? +pnlPct.toFixed(2) : null),
           rMultiple: data.rMultiple !== "" && data.rMultiple != null ? Number(data.rMultiple) : (r != null ? +r.toFixed(2) : null),
-        });
+        };
+        setTrades((prev) => prev.map((item) => (item.id === id ? { ...item, ...fallbackPayload } : item)));
       }
       setCloseId(null);
       setDetailId(null);
@@ -2184,11 +2187,9 @@ export default function TradingJournalApp() {
 
   const deferredSearch = useDeferredValue(search);
   const filtered = useMemo(() => {
-    let out = trades;
+    let out = Array.isArray(trades) ? trades : [];
     if (activeProfileId) {
       out = out.filter((trade) => trade.profileId === activeProfileId);
-    } else {
-      out = out.filter((trade) => !trade.profileId);
     }
     if (deferredSearch.trim()) {
       const q = deferredSearch.toLowerCase();
