@@ -47,10 +47,54 @@ export function clearAuthSession() {
   window.localStorage.removeItem('tj_user');
 }
 
-function readLocalProfiles() {
+const LOCAL_TRADES_KEY = 'tj-trades';
+const LOCAL_PROFILES_KEY = 'tj-profiles';
+const LOCAL_TRADES_HASH_KEY = 'tj-trades-hash';
+const LOCAL_PROFILES_HASH_KEY = 'tj-profiles-hash';
+
+function normalizeLocalCollection(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === 'object') return Object.values(value);
+  return [];
+}
+
+function collectionToHash(items) {
+  if (!Array.isArray(items)) return {};
+  return items.reduce((acc, item) => {
+    if (item && typeof item === 'object' && item.id) {
+      acc[item.id] = item;
+    }
+    return acc;
+  }, {});
+}
+
+function migrateCollectionToHash(raw, hashKey) {
+  if (!raw) return null;
+  try {
+    const items = JSON.parse(raw);
+    if (!Array.isArray(items)) return null;
+    const hash = collectionToHash(items);
+    window.localStorage.setItem(hashKey, JSON.stringify(hash));
+    return items;
+  } catch {
+    return null;
+  }
+}
+
+export function readLocalProfiles() {
   if (typeof window === 'undefined') return [];
   try {
-    return JSON.parse(window.localStorage.getItem('tj-profiles') || '[]');
+    const hashRaw = window.localStorage.getItem(LOCAL_PROFILES_HASH_KEY);
+    if (hashRaw) {
+      return normalizeLocalCollection(JSON.parse(hashRaw));
+    }
+    const raw = window.localStorage.getItem(LOCAL_PROFILES_KEY);
+    const arrayData = normalizeLocalCollection(JSON.parse(raw || '[]'));
+    if (raw) {
+      migrateCollectionToHash(raw, LOCAL_PROFILES_HASH_KEY);
+    }
+    return arrayData;
   } catch {
     return [];
   }
@@ -58,13 +102,24 @@ function readLocalProfiles() {
 
 function writeLocalProfiles(profiles) {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem('tj-profiles', JSON.stringify(profiles));
+  const hash = collectionToHash(profiles);
+  window.localStorage.setItem(LOCAL_PROFILES_HASH_KEY, JSON.stringify(hash));
+  window.localStorage.setItem(LOCAL_PROFILES_KEY, JSON.stringify(profiles));
 }
 
-function readLocalTrades() {
+export function readLocalTrades() {
   if (typeof window === 'undefined') return [];
   try {
-    return JSON.parse(window.localStorage.getItem('tj-trades') || '[]');
+    const hashRaw = window.localStorage.getItem(LOCAL_TRADES_HASH_KEY);
+    if (hashRaw) {
+      return normalizeLocalCollection(JSON.parse(hashRaw));
+    }
+    const raw = window.localStorage.getItem(LOCAL_TRADES_KEY);
+    const arrayData = normalizeLocalCollection(JSON.parse(raw || '[]'));
+    if (raw) {
+      migrateCollectionToHash(raw, LOCAL_TRADES_HASH_KEY);
+    }
+    return arrayData;
   } catch {
     return [];
   }
@@ -72,7 +127,17 @@ function readLocalTrades() {
 
 function writeLocalTrades(trades) {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem('tj-trades', JSON.stringify(trades));
+  const hash = collectionToHash(trades);
+  window.localStorage.setItem(LOCAL_TRADES_HASH_KEY, JSON.stringify(hash));
+  window.localStorage.setItem(LOCAL_TRADES_KEY, JSON.stringify(trades));
+}
+
+export function persistLocalProfiles(profiles) {
+  writeLocalProfiles(profiles);
+}
+
+export function persistLocalTrades(trades) {
+  writeLocalTrades(trades);
 }
 
 function upsertLocalTrade(trade) {

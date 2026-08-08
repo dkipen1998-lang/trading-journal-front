@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useDeferredValue } from "react";
-import { loginWithTelegram, fetchTrades, fetchProfiles, createProfile, updateProfile, createTrade, updateTrade, closeTrade, deleteTrade, deleteProfile, duplicateTrade, fetchStockSnapshot, fetchTopBinanceVolumeSymbols, clearToken, getUser, setUser } from "./api";
+import { loginWithTelegram, fetchTrades, fetchProfiles, createProfile, updateProfile, createTrade, updateTrade, closeTrade, deleteTrade, deleteProfile, duplicateTrade, fetchStockSnapshot, fetchTopBinanceVolumeSymbols, clearToken, getUser, setUser, readLocalTrades, readLocalProfiles, persistLocalTrades, persistLocalProfiles } from "./api";
 import {
   Plus, Search, SlidersHorizontal, Settings, X, Edit2, Trash2, Copy, Camera,
   ChevronRight, Home, BookOpen, BarChart2, Download, Eye, MessageSquare,
@@ -932,6 +932,20 @@ const fmt2 = (n) => {
   return (Math.round((Number(n) + Number.EPSILON) * 100) / 100).toLocaleString();
 };
 const cls = (...a) => a.filter(Boolean).join(" ");
+const formatDateOnly = (value) => {
+  if (!value) return "";
+  const dateString = String(value).trim();
+  const match = dateString.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (match) return match[1];
+  const date = new Date(dateString);
+  if (!Number.isFinite(date.getTime())) return dateString;
+  return date.toISOString().slice(0, 10);
+};
+const formatDateTime = (date, time) => {
+  const formattedDate = formatDateOnly(date);
+  if (!formattedDate) return "—";
+  return time ? `${formattedDate} ${time}` : formattedDate;
+};
 const formatStockPrice = (value, currency = "USD") => {
   if (value == null || Number.isNaN(Number(value))) return "—";
   const normalizedCurrency = typeof currency === "string" ? currency.trim().toUpperCase() : "";
@@ -1387,8 +1401,8 @@ export default function TradingJournalApp() {
     try {
       const hasAuthToken = Boolean(window.localStorage.getItem("tj_token"));
       if (hasAuthToken) return [];
-      const raw = window.localStorage.getItem("tj-trades");
-      return raw ? JSON.parse(raw) : seedTrades();
+      const saved = readLocalTrades();
+      return saved.length ? saved : seedTrades();
     } catch {
       return seedTrades();
     }
@@ -1510,8 +1524,7 @@ export default function TradingJournalApp() {
     try {
       const hasAuthToken = Boolean(window.localStorage.getItem("tj_token"));
       if (hasAuthToken) return [];
-      const raw = window.localStorage.getItem("tj-profiles");
-      return raw ? JSON.parse(raw) : [];
+      return readLocalProfiles();
     } catch {
       return [];
     }
@@ -1599,10 +1612,10 @@ export default function TradingJournalApp() {
           }
         }
 
-        const hasStoredLocalData = Boolean(typeof window !== "undefined" ? (window.localStorage.getItem("tj-trades") || window.localStorage.getItem("tj-profiles")) : "");
+        const hasStoredLocalData = Boolean(typeof window !== "undefined" ? (readLocalTrades().length || readLocalProfiles().length) : 0);
         if (typeof window !== "undefined" && (hasStoredToken || hasStoredLocalData)) {
-          const localTrades = JSON.parse(window.localStorage.getItem("tj-trades") || "[]");
-          const localProfiles = JSON.parse(window.localStorage.getItem("tj-profiles") || "[]");
+          const localTrades = readLocalTrades();
+          const localProfiles = readLocalProfiles();
 
           const [remoteTradesResponse, remoteProfilesResponse] = await Promise.all([
             fetchTrades(activeProfileId),
@@ -1682,7 +1695,11 @@ export default function TradingJournalApp() {
   }, []);
 
   useEffect(() => {
-    STORAGE.set("tj-trades", JSON.stringify(trades)).catch(() => {});
+    try {
+      persistLocalTrades(trades);
+    } catch {
+      // ignore persistence failures
+    }
   }, [trades]);
   useEffect(() => {
     STORAGE.set("tj-tags", JSON.stringify(tags)).catch(() => {});
@@ -2017,7 +2034,11 @@ export default function TradingJournalApp() {
     };
   }, [watchlist, trades, activeProfileId, profiles, standardProfile]);
   useEffect(() => {
-    STORAGE.set("tj-profiles", JSON.stringify(profiles)).catch(() => {});
+    try {
+      persistLocalProfiles(profiles);
+    } catch {
+      // ignore persistence failures
+    }
   }, [profiles]);
   useEffect(() => {
     STORAGE.set("tj-standard-profile", JSON.stringify(standardProfile)).catch(() => {});
@@ -3161,8 +3182,8 @@ const StatusBadge = React.memo(function StatusBadge({ status }) {
 });
 
 const TradeRow = React.memo(function TradeRow({ trade, onClick, t }) {
-  const entryStamp = trade.entryDate ? `${trade.entryDate}${trade.entryTime ? ` ${trade.entryTime}` : ""}` : "—";
-  const exitStamp = trade.status === "closed" && trade.exitDate ? `${trade.exitDate}${trade.exitTime ? ` ${trade.exitTime}` : ""}` : null;
+  const entryStamp = trade.entryDate ? formatDateTime(trade.entryDate, trade.entryTime) : "—";
+  const exitStamp = trade.status === "closed" && trade.exitDate ? formatDateTime(trade.exitDate, trade.exitTime) : null;
 
   return (
     <button onClick={onClick} className="tj-card" style={{ display: "flex", width: "100%", textAlign: "left", padding: 13, marginBottom: 10, alignItems: "center", gap: 12 }}>

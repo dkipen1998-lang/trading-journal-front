@@ -152,6 +152,20 @@ const fmt2 = (n) => {
   if (n == null || Number.isNaN(Number(n))) return "—";
   return (Math.round((Number(n) + Number.EPSILON) * 100) / 100).toLocaleString();
 };
+const formatDateOnly = (value) => {
+  if (!value) return "";
+  const dateString = String(value).trim();
+  const match = dateString.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (match) return match[1];
+  const date = new Date(dateString);
+  if (!Number.isFinite(date.getTime())) return dateString;
+  return date.toISOString().slice(0, 10);
+};
+const formatDateTime = (date, time) => {
+  const formattedDate = formatDateOnly(date);
+  if (!formattedDate) return "—";
+  return time ? `${formattedDate} ${time}` : formattedDate;
+};
 const cls = (...a) => a.filter(Boolean).join(" ");
 const formatStockPrice = (value, currency = "USD") => {
   if (value == null || Number.isNaN(Number(value))) return "—";
@@ -314,8 +328,8 @@ const EmptyState = React.memo(function EmptyState({ text }) {
 });
 
 const TradeRow = React.memo(function TradeRow({ trade, onClick, t }) {
-  const entryStamp = trade.entryDate ? `${trade.entryDate}${trade.entryTime ? ` ${trade.entryTime}` : ""}` : "—";
-  const exitStamp = trade.status === "closed" && trade.exitDate ? `${trade.exitDate}${trade.exitTime ? ` ${trade.exitTime}` : ""}` : null;
+  const entryStamp = trade.entryDate ? formatDateTime(trade.entryDate, trade.entryTime) : "—";
+  const exitStamp = trade.status === "closed" && trade.exitDate ? formatDateTime(trade.exitDate, trade.exitTime) : null;
   return (
     <button onClick={onClick} className="tj-card" style={{ display: "flex", width: "100%", textAlign: "left", padding: 13, marginBottom: 10, alignItems: "center", gap: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
@@ -1002,9 +1016,9 @@ export function TradeDetail({ trade, onClose, onEdit, onDelete, onDuplicate, onC
             <PnlText value={trade.pnl} size={28} />
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 18 }}>
-            <Field label={labels.entryDateLabel} value={trade.entryDate ? `${trade.entryDate} ${trade.entryTime || ""}`.trim() : "—"} />
+            <Field label={labels.entryDateLabel} value={trade.entryDate ? formatDateTime(trade.entryDate, trade.entryTime) : "—"} />
             <Field label={labels.entryPriceLabel} value={trade.entryPrice} />
-            <Field label={labels.exitDateLabel} value={trade.exitDate ? `${trade.exitDate} ${trade.exitTime || ""}`.trim() : "—"} />
+            <Field label={labels.exitDateLabel} value={trade.exitDate ? formatDateTime(trade.exitDate, trade.exitTime) : "—"} />
             <Field label={labels.exitPriceLabel} value={trade.exitPrice} />
             <Field label={labels.stopLossLabel} value={trade.stopLoss} />
             <Field label={labels.takeProfitLabel} value={trade.takeProfit} />
