@@ -486,6 +486,20 @@ export async function fetchHistoricalCandles(symbol, timeframe = '1h', limit = 8
 
 export async function loginWithTelegram(initData) {
   try {
+    if (!initData) {
+      const storedToken = getToken();
+      const storedUser = getUser();
+      if (storedToken || storedUser) {
+        return { token: storedToken, user: storedUser, fallback: true };
+      }
+      const fallbackUser = getFallbackUser();
+      if (fallbackUser) {
+        setUser(fallbackUser);
+        return { user: fallbackUser, fallback: true };
+      }
+      return { fallback: true };
+    }
+
     const result = await request('/auth/telegram', {
       method: 'POST',
       body: JSON.stringify({ initData }),
@@ -501,14 +515,17 @@ export async function loginWithTelegram(initData) {
     }
     return result || { user };
   } catch (error) {
+    const storedToken = getToken();
     const fallbackUser = getFallbackUser();
     if (typeof window !== 'undefined') {
       console.error('[auth] loginWithTelegram threw', error);
     }
-    if (fallbackUser) {
-      setUser(fallbackUser);
+    if (storedToken || fallbackUser) {
+      if (fallbackUser) {
+        setUser(fallbackUser);
+      }
       return {
-        user: fallbackUser,
+        user: fallbackUser || getUser(),
         fallback: true,
         error: error?.message || 'Login failed',
       };

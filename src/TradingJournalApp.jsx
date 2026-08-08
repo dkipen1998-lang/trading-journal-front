@@ -1510,17 +1510,14 @@ export default function TradingJournalApp() {
 
     try {
       const initData = getTelegramInitData();
-
-      if (!initData) {
-        const reason = typeof window !== "undefined" && window.Telegram?.WebApp
-          ? "Telegram Mini App did not expose auth data."
-          : "This page is not running inside Telegram Mini App.";
-        throw new Error(`Telegram auth data not found. ${reason}`);
-      }
-
       const result = await loginWithTelegram(initData);
-      setIsAuthenticated(true);
-      setUser(result?.user || getUser());
+      const userFromResult = result?.user || getUser();
+      const hasStoredSession = Boolean(typeof window !== "undefined" ? window.localStorage.getItem("tj_token") : "") || Boolean(userFromResult);
+      setIsAuthenticated(hasStoredSession);
+      setUser(userFromResult);
+      if (!initData && !hasStoredSession) {
+        setAuthError("Telegram auth data was not found, but local data is available.");
+      }
     } catch (error) {
       setAuthError(error?.message || "Authorization failed");
     } finally {
@@ -1550,11 +1547,18 @@ export default function TradingJournalApp() {
 
         if (initData) {
           const result = await loginWithTelegram(initData);
-          if (result?.token || (typeof window !== "undefined" && window.localStorage.getItem("tj_token"))) {
+          const hasStoredSession = Boolean(typeof window !== "undefined" && window.localStorage.getItem("tj_token"));
+          if (result?.token || hasStoredSession || result?.user) {
             setIsAuthenticated(true);
           }
           if (result?.user) {
             setUser(result.user);
+          }
+        } else {
+          const storedUser = getUser();
+          if (storedUser) {
+            setIsAuthenticated(true);
+            setUser(storedUser);
           }
         }
 
@@ -1591,12 +1595,12 @@ export default function TradingJournalApp() {
         }
 
         if (telegramApp) {
-          telegramApp.ready();
-          telegramApp.expand();
-        }
-
-        if (!initData && !hasStoredToken) {
-          throw new Error("Offline mode");
+          try {
+            telegramApp.ready();
+            telegramApp.expand();
+          } catch {
+            // ignore Telegram WebApp bootstrap issues
+          }
         }
       } catch (e) {
         const storedTrades = typeof window !== "undefined" ? window.localStorage.getItem("tj-trades") : null;
