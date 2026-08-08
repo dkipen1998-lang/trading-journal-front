@@ -12,6 +12,10 @@ function setToken(token) {
   localStorage.setItem('tj_token', token);
 }
 
+function hasToken() {
+  return Boolean(getToken());
+}
+
 function readUser() {
   if (typeof window === 'undefined') return null;
   try {
@@ -25,8 +29,12 @@ export function getUser() {
   return readUser();
 }
 
-function setUser(user) {
-  if (!user || typeof window === 'undefined') return;
+export function setUser(user) {
+  if (typeof window === 'undefined') return;
+  if (!user) {
+    window.localStorage.removeItem('tj_user');
+    return;
+  }
   window.localStorage.setItem('tj_user', JSON.stringify(user));
 }
 
@@ -432,7 +440,12 @@ export async function loginWithTelegram(initData) {
   });
 
   const token = result?.token || result?.access_token || '';
-  if (token) setToken(token);
+  if (token) {
+    setToken(token);
+  }
+  if (result?.user) {
+    setUser(result.user);
+  }
   return result;
 }
 
@@ -448,10 +461,20 @@ export async function fetchTrades(profileId) {
 }
 
 export async function fetchProfiles() {
+  if (hasToken()) {
+    return request('/profiles');
+  }
   return readLocalProfiles();
 }
 
 export async function createProfile(profile) {
+  if (hasToken()) {
+    return request('/profiles', {
+      method: 'POST',
+      body: JSON.stringify(profile),
+    });
+  }
+
   const profiles = readLocalProfiles();
   const createdProfile = {
     id: generateId(),
@@ -468,6 +491,13 @@ export async function createProfile(profile) {
 }
 
 export async function updateProfile(id, profile) {
+  if (hasToken()) {
+    return request(`/profiles/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(profile),
+    });
+  }
+
   const profiles = readLocalProfiles();
   const nextProfiles = profiles.map((item) =>
     item.id === id ? { ...item, ...profile, updatedAt: new Date().toISOString() } : item,
@@ -477,6 +507,12 @@ export async function updateProfile(id, profile) {
 }
 
 export async function deleteProfile(id) {
+  if (hasToken()) {
+    return request(`/profiles/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
   const profiles = readLocalProfiles();
   const nextProfiles = profiles.filter((item) => item.id !== id);
   writeLocalProfiles(nextProfiles);

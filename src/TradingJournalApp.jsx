@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useDeferredValue } from "react";
-import { loginWithTelegram, fetchTrades, fetchProfiles, createProfile, updateProfile, createTrade, updateTrade, closeTrade, deleteTrade, deleteProfile, duplicateTrade, fetchStockSnapshot, fetchTopBinanceVolumeSymbols, clearToken, getUser } from "./api";
+import { loginWithTelegram, fetchTrades, fetchProfiles, createProfile, updateProfile, createTrade, updateTrade, closeTrade, deleteTrade, deleteProfile, duplicateTrade, fetchStockSnapshot, fetchTopBinanceVolumeSymbols, clearToken, getUser, setUser } from "./api";
 import {
   Plus, Search, SlidersHorizontal, Settings, X, Edit2, Trash2, Copy, Camera,
   ChevronRight, Home, BookOpen, BarChart2, Download, Eye, MessageSquare,
@@ -35,6 +35,24 @@ const STORAGE = typeof window !== "undefined" && window.storage
     };
 
 const STANDARD_PROFILE_ID = "__standard__";
+
+function getTelegramInitData() {
+  if (typeof window === "undefined") return "";
+
+  const webApp = window.Telegram?.WebApp;
+  const searchParams = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+
+  const candidates = [
+    webApp?.initData,
+    searchParams.get("tgWebAppData"),
+    searchParams.get("initData"),
+    hashParams.get("tgWebAppData"),
+    hashParams.get("initData"),
+  ];
+
+  return candidates.find((value) => typeof value === "string" && value.trim())?.trim() || "";
+}
 
 const LANGUAGE_LABELS = {
   ru: {
@@ -1246,6 +1264,8 @@ export default function TradingJournalApp() {
   const [trades, setTrades] = useState(() => {
     if (typeof window === "undefined") return seedTrades();
     try {
+      const hasAuthToken = Boolean(window.localStorage.getItem("tj_token"));
+      if (hasAuthToken) return [];
       const raw = window.localStorage.getItem("tj-trades");
       return raw ? JSON.parse(raw) : seedTrades();
     } catch {
@@ -1367,6 +1387,8 @@ export default function TradingJournalApp() {
   const [profiles, setProfiles] = useState(() => {
     if (typeof window === "undefined") return [];
     try {
+      const hasAuthToken = Boolean(window.localStorage.getItem("tj_token"));
+      if (hasAuthToken) return [];
       const raw = window.localStorage.getItem("tj-profiles");
       return raw ? JSON.parse(raw) : [];
     } catch {
@@ -1400,12 +1422,13 @@ export default function TradingJournalApp() {
     setAuthLoading(true);
 
     try {
-      const params = new URLSearchParams(window.location.search);
-      const telegramApp = typeof window !== "undefined" ? window.Telegram?.WebApp : null;
-      const initData = telegramApp?.initData || params.get("tgWebAppData") || params.get("initData") || "";
+      const initData = getTelegramInitData();
 
       if (!initData) {
-        throw new Error("Telegram auth data not found");
+        const reason = typeof window !== "undefined" && window.Telegram?.WebApp
+          ? "Telegram Mini App did not expose auth data."
+          : "This page is not running inside Telegram Mini App.";
+        throw new Error(`Telegram auth data not found. ${reason}`);
       }
 
       const result = await loginWithTelegram(initData);
@@ -1429,13 +1452,44 @@ export default function TradingJournalApp() {
 
     (async () => {
       try {
-        const params = new URLSearchParams(window.location.search);
+        const initData = getTelegramInitData();
         const telegramApp = typeof window !== "undefined" ? window.Telegram?.WebApp : null;
-        const initData = telegramApp?.initData || params.get("tgWebAppData") || params.get("initData") || "";
         const hasStoredToken = Boolean(typeof window !== "undefined" ? window.localStorage.getItem("tj_token") : "");
 
         if (initData) {
           await loginWithTelegram(initData);
+        }
+
+        if (typeof window !== "undefined" && window.localStorage.getItem("tj_token")) {
+          const localTrades = JSON.parse(window.localStorage.getItem("tj-trades") || "[]");
+          const localProfiles = JSON.parse(window.localStorage.getItem("tj-profiles") || "[]");
+
+          const [remoteTradesResponse, remoteProfilesResponse] = await Promise.all([
+            fetchTrades(activeProfileId),
+            fetchProfiles(),
+          ]);
+          const normalizedRemoteTrades = remoteTradesResponse?.items || remoteTradesResponse || [];
+          const normalizedRemoteProfiles = Array.isArray(remoteProfilesResponse) ? remoteProfilesResponse : [];
+
+          if (Array.isArray(normalizedRemoteTrades) && normalizedRemoteTrades.length > 0) {
+            setTrades(normalizedRemoteTrades);
+          } else if (localTrades.length > 0) {
+            await Promise.all(localTrades.map((trade) => createTrade(trade)));
+            const [syncedTrades] = await Promise.all([fetchTrades(activeProfileId)]);
+            const syncedItems = syncedTrades?.items || syncedTrades || [];
+            setTrades(Array.isArray(syncedItems) ? syncedItems : []);
+          }
+
+          if (Array.isArray(normalizedRemoteProfiles) && normalizedRemoteProfiles.length > 0) {
+            setProfiles(normalizedRemoteProfiles);
+          } else if (localProfiles.length > 0) {
+            await Promise.all(localProfiles.map((profile) => createProfile(profile)));
+            const syncedProfiles = await fetchProfiles();
+            setProfiles(Array.isArray(syncedProfiles) ? syncedProfiles : []);
+          }
+
+          window.localStorage.removeItem("tj-trades");
+          window.localStorage.removeItem("tj-profiles");
         }
 
         if (telegramApp) {
