@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react";
 import { createChart } from "lightweight-charts";
-import { fetchHistoricalCandles, fetchLatestNews } from "../api";
+import { fetchHistoricalCandles, fetchChatReply } from "../api";
 import {
   Plus, Search, SlidersHorizontal, Settings, X, Edit2, Trash2, Copy, Camera,
   ChevronRight, Home, BookOpen, BarChart2, Download, Eye,
@@ -100,6 +100,12 @@ const FALLBACK_LABELS = {
   news: "News",
   latestNews: "Latest news",
   refreshNews: "Refresh",
+  chat: "AI Chat",
+  sendMessage: "Send",
+  messagePlaceholder: "Ask ChatGPT about trading...",
+  chatEmpty: "Ask something to start the conversation.",
+  assistantLabel: "Assistant",
+  userLabel: "You",
   noNews: "No news available.",
   noTrades: "No trades",
   journal: "Journal",
@@ -212,11 +218,11 @@ function calcPnl(trade) {
   return { pnl: +pnl.toFixed(2), pnlPct: pnlPct != null ? +pnlPct.toFixed(2) : null, r: r != null ? +r.toFixed(2) : null };
 }
 
-export function NavItem({ icon: Icon, label, active, onClick }) {
+export function NavItem({ icon: Icon, label, active, onClick, className }) {
   return (
-    <button className={cls("tj-navitem", active && "active")} onClick={onClick}>
-      <Icon size={18} strokeWidth={active ? 2.2 : 1.6} />
-      <span>{label}</span>
+    <button className={cls("tj-navitem", active && "active", className)} onClick={onClick}>
+      {Icon ? <Icon size={18} strokeWidth={active ? 2.2 : 1.6} /> : null}
+      {label ? <span>{label}</span> : null}
     </button>
   );
 }
@@ -470,62 +476,88 @@ export function JournalScreen({ trades, search, setSearch, onOpenFilter, onOpenD
   );
 }
 
-export function NewsScreen({ t }) {
-  const [news, setNews] = useState([]);
+export function ChatScreen({ t }) {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const labels = t || FALLBACK_LABELS;
 
-  const loadNews = async () => {
-    setLoading(true);
+  const sendMessage = async () => {
+    const trimmed = input.trim();
+    if (!trimmed) return;
+
     setError(null);
+    setLoading(true);
+    setMessages((prev) => [...prev, { role: 'user', text: trimmed }]);
+    setInput("");
+
     try {
-      const latestNews = await fetchLatestNews();
-      setNews(Array.isArray(latestNews) ? latestNews : []);
+      const result = await fetchChatReply(trimmed);
+      const reply = result?.text || "No response from AI.";
+      setMessages((prev) => [...prev, { role: 'assistant', text: reply }]);
     } catch (err) {
-      setError(err?.message || "Failed to load news");
+      setError(err?.message || "Chat request failed");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadNews();
-  }, []);
-
   return (
     <div style={{ paddingBottom: 100 }}>
       <div style={{ padding: "18px 16px 0", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-        <div className="tj-display" style={{ fontSize: 20, fontWeight: 700 }}>{labels.news || "News"}</div>
-        <button className="tj-btn-ghost" style={{ padding: "8px 10px", fontSize: 12.5 }} onClick={loadNews} disabled={loading}>
-          {labels.refreshNews || "Refresh"}
-        </button>
+        <div className="tj-display" style={{ fontSize: 20, fontWeight: 700 }}>{labels.chat || labels.news || "AI Chat"}</div>
       </div>
+
       <div className="tj-card" style={{ margin: "12px 16px", padding: 14 }}>
-        {loading && <div style={{ color: "var(--text-dim)" }}>Loading...</div>}
-        {error && <div style={{ color: "var(--loss)" }}>{error}</div>}
-        {!loading && !error && news.length === 0 && <div style={{ color: "var(--text-dim)" }}>{labels.noNews || "No news available."}</div>}
-        {!loading && news.length > 0 && (
-          <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-            {news.map((item, index) => (
-              <li key={index} style={{ marginBottom: 14 }}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
-                  <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--link)", textDecoration: "none", fontSize: 14, fontWeight: 600, flex: 1 }}>
-                    {item.title}
-                  </a>
-                  {item.source ? (
-                    <span style={{ color: "var(--text-faint)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 2 }}>
-                      {item.source}
-                    </span>
-                  ) : null}
-                </div>
-                {item.ticker ? <div style={{ marginTop: 6, fontSize: 12, color: "var(--text-faint)" }}>Ticker: {item.ticker}</div> : null}
-                {item.summary ? <div style={{ marginTop: 6, fontSize: 12, color: "var(--text-dim)" }}>{item.summary}</div> : null}
-                {item.publishedAt ? <div style={{ marginTop: 6, fontSize: 11, color: "var(--text-faint)" }}>{new Date(item.publishedAt).toLocaleString()}</div> : null}
-              </li>
-            ))}
-          </ul>
+        {messages.length === 0 && !loading && !error && (
+          <div style={{ color: "var(--text-dim)" }}>{labels.chatEmpty || "Ask something to start the conversation."}</div>
         )}
+
+        {messages.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {messages.map((message, index) => (
+              <div
+                key={`${message.role}-${index}`}
+                className="tj-card"
+                style={{
+                  padding: 12,
+                  background: message.role === 'assistant' ? 'var(--surface-2)' : 'var(--surface)',
+                  border: message.role === 'user' ? '1px solid var(--border)' : '1px solid transparent',
+                }}
+              >
+                <div style={{ fontSize: 11, color: "var(--text-faint)", marginBottom: 6 }}>
+                  {message.role === 'assistant' ? labels.assistantLabel || 'Assistant' : labels.userLabel || 'You'}
+                </div>
+                <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 14, color: 'var(--text)' }}>
+                  {message.text}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {error && <div style={{ color: "var(--loss)", marginTop: 10 }}>{error}</div>}
+
+        <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+          <textarea
+            className="tj-input"
+            rows={4}
+            placeholder={labels.messagePlaceholder || "Ask ChatGPT about trading..."}
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+              }
+            }}
+            style={{ width: '100%', resize: 'vertical' }}
+          />
+          <button className="tj-btn-primary" onClick={sendMessage} disabled={loading || !input.trim()}>
+            {loading ? labels.sending || 'Sending...' : labels.sendMessage || 'Send'}
+          </button>
+        </div>
       </div>
     </div>
   );

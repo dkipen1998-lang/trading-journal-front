@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useMemo, useRef, useDeferredValue } from "react";
-import { loginWithTelegram, fetchTrades, fetchProfiles, createProfile, updateProfile, createTrade, updateTrade, closeTrade, deleteTrade, deleteProfile, duplicateTrade, fetchStockSnapshot, fetchTopBinanceVolumeSymbols } from "./api";
+import { loginWithTelegram, fetchTrades, fetchProfiles, createProfile, updateProfile, createTrade, updateTrade, closeTrade, deleteTrade, deleteProfile, duplicateTrade, fetchStockSnapshot, fetchTopBinanceVolumeSymbols, clearToken, getUser } from "./api";
 import {
   Plus, Search, SlidersHorizontal, Settings, X, Edit2, Trash2, Copy, Camera,
-  ChevronRight, Home, BookOpen, BarChart2, Download, Eye, Rss,
+  ChevronRight, Home, BookOpen, BarChart2, Download, Eye, MessageSquare,
   ArrowUpRight, ArrowDownRight
 } from "lucide-react";
 import {
   DashboardScreen,
   JournalScreen,
-  NewsScreen,
+  ChatScreen,
   ScreenerPanel,
   StatsScreen,
   TradeDetail,
@@ -42,6 +42,8 @@ const LANGUAGE_LABELS = {
     dashboard: "Панель",
     statistics: "Статистика",
     watchlist: "Список наблюдения",
+    login: "Войти",
+    logout: "Выйти",
     news: "Новости",
     latestNews: "Последние новости",
     refreshNews: "Обновить",
@@ -153,6 +155,8 @@ const LANGUAGE_LABELS = {
     dashboard: "Дашборд",
     statistics: "Статистика",
     watchlist: "Список спостереження",
+    login: "Увійти",
+    logout: "Вийти",
     news: "Новини",
     latestNews: "Останні новини",
     refreshNews: "Оновити",
@@ -343,6 +347,8 @@ const LANGUAGE_LABELS = {
     journal: "Journal",
     dashboard: "Dashboard",
     statistics: "Statistics",
+    login: "Login",
+    logout: "Logout",
     watchlist: "Watchlist",
     news: "News",
     latestNews: "Latest news",
@@ -607,6 +613,7 @@ const STYLE = `
   padding: 10px 12px;
   font-size: 14px;
   width: 100%;
+  box-sizing: border-box;
   outline: none;
 }
 .tj-input-compact {
@@ -701,6 +708,58 @@ const STYLE = `
   background: linear-gradient(180deg,#fff,#fff7ee);
   border-color: rgba(232,163,61,0.15);
   box-shadow: 0 10px 26px rgba(0,0,0,0.18);
+}
+.tj-navitem.tj-ai-navitem {
+  flex: 0 0 58px;
+  width: 58px;
+  height: 58px;
+  min-width: 58px;
+  max-width: 58px;
+  padding: 0;
+  border-radius: 50%;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(80, 200, 120, 0.82) 0%, rgba(56, 156, 92, 0.7) 100%);
+  color: #f7fbff;
+  border: 1px solid rgba(255,255,255,0.24);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 10px 24px rgba(80, 200, 120, 0.24), 0 0 20px rgba(80, 200, 120, 0.16);
+  transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease, background 220ms ease;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  position: relative;
+  overflow: hidden;
+}
+.tj-navitem.tj-ai-navitem::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, rgba(255,255,255,0.34) 0%, rgba(255,255,255,0.06) 40%, rgba(255,255,255,0) 70%);
+  transform: translateX(-100%);
+  transition: transform 220ms ease;
+  pointer-events: none;
+}
+.tj-navitem.tj-ai-navitem span {
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: #ffffff;
+  text-shadow: 0 0 10px rgba(255,255,255,0.45);
+}
+.tj-navitem.tj-ai-navitem:hover {
+  transform: translateY(-2px) scale(1.04);
+  background: linear-gradient(135deg, rgba(60, 170, 100, 0.9) 0%, rgba(36, 116, 72, 0.82) 100%);
+  filter: brightness(1.08);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.12), 0 14px 30px rgba(80, 200, 120, 0.3), 0 0 26px rgba(80, 200, 120, 0.22);
+}
+.tj-navitem.tj-ai-navitem:hover::before {
+  transform: translateX(100%);
+}
+.tj-navitem.tj-ai-navitem:active {
+  transform: scale(0.96);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.16), 0 6px 16px rgba(80, 200, 120, 0.22), 0 0 16px rgba(80, 200, 120, 0.16);
+}
+.tj-navitem.tj-ai-navitem.active {
+  background: linear-gradient(135deg, rgba(78, 214, 124, 0.94) 0%, rgba(48, 164, 96, 0.8) 100%);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.16), 0 0 22px rgba(80, 200, 120, 0.24), 0 14px 30px rgba(80, 200, 120, 0.28);
 }
 
 /* removed .tj-navicon per user request */
@@ -1163,6 +1222,20 @@ export default function TradingJournalApp() {
     }
   });
   const [isSavingTrade, setIsSavingTrade] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return Boolean(window.localStorage.getItem("tj_token"));
+    } catch {
+      return false;
+    }
+  });
+  const [user, setUser] = useState(() => {
+    if (typeof window === "undefined") return null;
+    return getUser();
+  });
   const saveInFlightRef = useRef(false);
   const [language, setLanguage] = useState(() => {
     if (typeof window === "undefined") return "en";
@@ -1320,6 +1393,36 @@ export default function TradingJournalApp() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [editingProfileId, setEditingProfileId] = useState("");
+
+  const handleTelegramLogin = async () => {
+    if (authLoading) return;
+    setAuthError(null);
+    setAuthLoading(true);
+
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const telegramApp = typeof window !== "undefined" ? window.Telegram?.WebApp : null;
+      const initData = telegramApp?.initData || params.get("tgWebAppData") || params.get("initData") || "";
+
+      if (!initData) {
+        throw new Error("Telegram auth data not found");
+      }
+
+      const result = await loginWithTelegram(initData);
+      setIsAuthenticated(true);
+      setUser(result?.user || getUser());
+    } catch (error) {
+      setAuthError(error?.message || "Authorization failed");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    clearToken();
+    setIsAuthenticated(false);
+    setUser(null);
+  };
 
   useEffect(() => {
     clearLegacyWatchlistStorage();
@@ -2162,14 +2265,24 @@ export default function TradingJournalApp() {
 
         <div style={{ padding: "10px 16px 0" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <div className="tj-mono" style={{ fontSize: 12, color: "var(--text-dim)" }}>{t.language}: {language === "uk" ? t.ukrainian : t.english}</div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              <button className={cls("tj-chip", language === "en" && "on")} onClick={() => setLanguage("en")}>EN</button>
-              <button className={cls("tj-chip", language === "uk" && "on")} onClick={() => setLanguage("uk")}>UA</button>
-              <button className={cls("tj-chip", language === "ru" && "on")} onClick={() => setLanguage("ru")}>RU</button>
-              
-            </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            {user?.photoUrl ? (
+              <img
+                src={user.photoUrl}
+                alt={user?.firstName || user?.username || "User"}
+                style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover", border: "1px solid var(--border)" }}
+              />
+            ) : null}
+            <button className="tj-chip" onClick={isAuthenticated ? handleLogout : handleTelegramLogin} disabled={authLoading}>
+              {isAuthenticated ? (t.logout || "Logout") : (t.login || "Login")}
+            </button>
           </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <button className={cls("tj-chip", language === "en" && "on")} onClick={() => setLanguage("en")}>EN</button>
+            <button className={cls("tj-chip", language === "uk" && "on")} onClick={() => setLanguage("uk")}>UA</button>
+            <button className={cls("tj-chip", language === "ru" && "on")} onClick={() => setLanguage("ru")}>RU</button>
+          </div>
+        </div>
 
           <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center" }}>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
@@ -2200,6 +2313,9 @@ export default function TradingJournalApp() {
               ))}
             </div>
           </div>
+          {authError ? (
+            <div style={{ marginTop: 10, color: "var(--loss)", fontSize: 12 }}>{authError}</div>
+          ) : null}
           {profileModalOpen && (
             <div className="tj-sheet-backdrop" onClick={() => setProfileModalOpen(false)}>
               <div className="tj-sheet tj-scroll-hide" onClick={(event) => event.stopPropagation()}>
@@ -2354,7 +2470,7 @@ export default function TradingJournalApp() {
             t={t}
           />
         )}
-        {tab === "news" && <NewsScreen t={t} />}
+        {tab === "news" && <ChatScreen t={t} />}
         {tab === "watchlist" && (
           <div style={{ padding: 18 }}>
             <div className="tj-display" style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>{t.watchlistTitle}</div>
@@ -2440,7 +2556,7 @@ export default function TradingJournalApp() {
         <nav className="tj-navbar">
           <NavItem icon={Home} label={t.dashboard} active={tab === "dashboard"} onClick={() => setTab("dashboard")} />
           <NavItem icon={BookOpen} label={t.journal} active={tab === "journal"} onClick={() => setTab("journal")} />
-          <NavItem icon={Rss} label={t.news} active={tab === "news"} onClick={() => setTab("news")} />
+          <NavItem className="tj-ai-navitem" active={tab === "news"} onClick={() => setTab("news")} label="AI" />
           <NavItem icon={Eye} label={t.watchlist} active={tab === "watchlist"} onClick={() => setTab("watchlist")} />
           <NavItem icon={BarChart2} label={t.screener} active={tab === "screener"} onClick={() => setTab("screener")} />
         </nav>

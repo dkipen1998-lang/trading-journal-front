@@ -12,8 +12,27 @@ function setToken(token) {
   localStorage.setItem('tj_token', token);
 }
 
-function clearToken() {
+function readUser() {
+  if (typeof window === 'undefined') return null;
+  try {
+    return JSON.parse(window.localStorage.getItem('tj_user') || 'null');
+  } catch {
+    return null;
+  }
+}
+
+export function getUser() {
+  return readUser();
+}
+
+function setUser(user) {
+  if (!user || typeof window === 'undefined') return;
+  window.localStorage.setItem('tj_user', JSON.stringify(user));
+}
+
+export function clearToken() {
   localStorage.removeItem('tj_token');
+  localStorage.removeItem('tj_user');
 }
 
 function readLocalProfiles() {
@@ -102,6 +121,17 @@ async function requestFinnhub(path) {
   } catch {
     return null;
   }
+}
+
+export async function fetchChatReply(message) {
+  if (!message || typeof message !== 'string') {
+    throw new Error('Message is required');
+  }
+
+  return request('/ai/chat', {
+    method: 'POST',
+    body: JSON.stringify({ message }),
+  });
 }
 
 const BINANCE_SPOT_BASE = 'https://api.binance.com';
