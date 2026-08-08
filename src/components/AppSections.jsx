@@ -944,6 +944,9 @@ export function StatsScreen({ stats, onOpenFilter, filtersActive, t }) {
 }
 
 export function TradeDetail({ trade, onClose, onEdit, onDelete, onDuplicate, onCloseTrade, t }) {
+  if (!trade || !trade.id) {
+    return null;
+  }
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [fullImg, setFullImg] = useState(null);
   const labels = t || FALLBACK_LABELS;
@@ -1157,7 +1160,7 @@ export function Row2({ children }) { return <div style={{ display: "grid", gridT
 export function NumField({ label, value, onChange, onBlur }) { return <div><label className="tj-label">{label}</label><input className="tj-input tj-input-compact tj-mono" type="number" inputMode="decimal" value={value} onChange={(event) => onChange(event.target.value)} onBlur={onBlur} placeholder="0.00" style={{ minHeight: 30, padding: "6px 8px", fontSize: 12.5 }} /></div>; }
 
 export function CloseTradeForm({ trade, onClose, onSubmit, t }) {
-  if (!trade) {
+  if (!trade || !trade.id) {
     return null;
   }
   const [form, setForm] = useState({ exitPrice: "", exitDate: todayISO(), exitTime: nowTime(), exitReason: "", pnl: "", pnlPercent: "", rMultiple: "", exitScreenshot: null, postComment: "" });
