@@ -36,6 +36,15 @@ const STORAGE = typeof window !== "undefined" && window.storage
 
 const STANDARD_PROFILE_ID = "__standard__";
 
+function TelegramIcon() {
+  return (
+    <svg viewBox="0 0 240 240" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="120" cy="120" r="120" fill="#0088CC" />
+      <path d="M185 72.5L169.8 178.2C167.9 190.5 160.7 193.5 150.8 187.2L119.4 159.1L104.3 173.3C101.6 175.8 99 178.4 95.8 178.4L98.5 143.4L172.4 85.4C176.1 82.4 171.8 80.4 167.3 83.4L79.4 142.1L42.4 132.7C30.1 129.7 30.4 120.2 45.5 115.7L175.2 70.5C183.4 67.7 190.9 71.6 185 72.5Z" fill="white" />
+    </svg>
+  );
+}
+
 function getTelegramInitData() {
   if (typeof window === "undefined") return "";
 
@@ -1259,6 +1268,7 @@ export default function TradingJournalApp() {
     if (typeof window === "undefined") return "en";
     return window.localStorage.getItem("tj-language") || "en";
   });
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
 
   const [trades, setTrades] = useState(() => {
@@ -1497,9 +1507,6 @@ export default function TradingJournalApp() {
             const syncedProfiles = await fetchProfiles();
             setProfiles(Array.isArray(syncedProfiles) ? syncedProfiles : []);
           }
-
-          window.localStorage.removeItem("tj-trades");
-          window.localStorage.removeItem("tj-profiles");
         }
 
         if (telegramApp) {
@@ -1507,18 +1514,7 @@ export default function TradingJournalApp() {
           telegramApp.expand();
         }
 
-        if (initData || hasStoredToken) {
-          const [remoteTrades, remoteProfiles] = await Promise.all([fetchTrades(activeProfileId), fetchProfiles()]);
-          const items = remoteTrades?.items || remoteTrades || [];
-          if (Array.isArray(items)) {
-            setTrades(items);
-          } else {
-            setTrades([]);
-          }
-          if (Array.isArray(remoteProfiles)) {
-            setProfiles(remoteProfiles);
-          }
-        } else {
+        if (!initData && !hasStoredToken) {
           throw new Error("Offline mode");
         }
       } catch (e) {
@@ -2329,42 +2325,104 @@ export default function TradingJournalApp() {
 
         <div style={{ padding: "10px 16px 0" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             {user ? (
               <>
-                {user.photoUrl ? (
-                  <img
-                    src={user.photoUrl}
-                    alt={user?.firstName || user?.username || "User"}
-                    style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover", border: "1px solid var(--border)" }}
-                  />
-                ) : (
-                  <div
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: "50%",
-                      background: "var(--border)",
-                      display: "grid",
-                      placeItems: "center",
-                      color: "var(--text)",
-                      fontWeight: 700,
-                    }}
-                  >
-                    {(user.firstName || user.username || "U").charAt(0).toUpperCase()}
-                  </div>
-                )}
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() => setProfileMenuOpen((prev) => !prev)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    border: "none",
+                    background: "transparent",
+                    padding: 0,
+                    cursor: "pointer",
+                  }}
+                >
+                  {user.photoUrl ? (
+                    <img
+                      src={user.photoUrl}
+                      alt={user?.firstName || user?.username || "User"}
+                      style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover", border: "1px solid var(--border)" }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: "50%",
+                        background: "var(--border)",
+                        display: "grid",
+                        placeItems: "center",
+                        color: "var(--text)",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {(user.firstName || user.username || "U").charAt(0).toUpperCase()}
+                    </div>
+                  )}
                   <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>
                     {user.firstName || user.username || "User"}
                   </span>
-                  <button className="tj-chip" onClick={isAuthenticated ? handleLogout : handleTelegramLogin} disabled={authLoading}>
-                    {isAuthenticated ? (t.logout || "Logout") : (t.login || "Login")}
-                  </button>
-                </div>
+                </button>
+                {profileMenuOpen && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: 48,
+                      right: 0,
+                      minWidth: 180,
+                      borderRadius: 12,
+                      background: "var(--surface-2)",
+                      boxShadow: "0 16px 40px rgba(0,0,0,.2)",
+                      padding: 12,
+                      zIndex: 30,
+                    }}
+                  >
+                    <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 10 }}>
+                      {user.photoUrl ? (
+                        <img
+                          src={user.photoUrl}
+                          alt={user?.firstName || user?.username || "User"}
+                          style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover", border: "1px solid var(--border)" }}
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: "50%",
+                            background: "var(--border)",
+                            display: "grid",
+                            placeItems: "center",
+                            color: "var(--text)",
+                            fontWeight: 700,
+                          }}
+                        >
+                          {(user.firstName || user.username || "U").charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 700 }}>{user.firstName || user.username || "User"}</div>
+                        <div style={{ fontSize: 12, color: "var(--muted)" }}>{user.username ? `@${user.username}` : "Telegram profile"}</div>
+                      </div>
+                    </div>
+                    <button className="tj-chip" style={{ width: "100%" }} onClick={() => { handleLogout(); setProfileMenuOpen(false); }}>
+                      {t.logout || "Logout"}
+                    </button>
+                  </div>
+                )}
               </>
             ) : (
-              <button className="tj-chip" onClick={handleTelegramLogin} disabled={authLoading}>
+              <button
+                className="tj-chip"
+                onClick={handleTelegramLogin}
+                disabled={authLoading}
+                style={{ display: "flex", alignItems: "center", gap: 8 }}
+              >
+                <TelegramIcon />
                 {t.login || "Login"}
               </button>
             )}
