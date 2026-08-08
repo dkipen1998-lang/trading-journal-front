@@ -1053,8 +1053,8 @@ function createTradeChartScreenshot(trade, closeData = {}) {
       <circle cx="${width - paddingX}" cy="${exitY}" r="6" fill="#F0556B" />
       ${stopLineY != null ? `<line x1="${paddingX}" y1="${stopLineY}" x2="${width - paddingX}" y2="${stopLineY}" stroke="#F0556B" stroke-dasharray="8 6" stroke-width="2" />` : ""}
       ${takeLineY != null ? `<line x1="${paddingX}" y1="${takeLineY}" x2="${width - paddingX}" y2="${takeLineY}" stroke="#3DDC97" stroke-dasharray="8 6" stroke-width="2" />` : ""}
-      <text x="40" y="${height - 48}" fill="#ECEEF1" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="600">Entry ${entryPrice.toFixed(2)} • Exit ${exitPrice.toFixed(2)}</text>
-      <text x="40" y="${height - 20}" fill="${pnl >= 0 ? "#3DDC97" : "#F0556B"}" font-size="20" font-family="Segoe UI, Arial, sans-serif" font-weight="700">P&L ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}</text>
+      <text x="40" y="${height - 48}" fill="#ECEEF1" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="600">Entry ${Number.isFinite(entryPrice) ? entryPrice.toFixed(2) : "0.00"} • Exit ${Number.isFinite(exitPrice) ? exitPrice.toFixed(2) : "0.00"}</text>
+      <text x="40" y="${height - 20}" fill="${Number.isFinite(pnl) && pnl >= 0 ? "#3DDC97" : "#F0556B"}" font-size="20" font-family="Segoe UI, Arial, sans-serif" font-weight="700">P&L ${Number.isFinite(pnl) ? `${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}` : "0.00"}</text>
     </svg>
   `;
 

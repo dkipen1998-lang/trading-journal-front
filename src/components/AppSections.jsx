@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react";
 import { createChart } from "lightweight-charts";
 import { fetchHistoricalCandles, fetchChatReply } from "../api";
+
+function formatNumber(value, decimals = 2) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return null;
+  return number.toFixed(decimals);
+}
 import {
   Plus, Search, SlidersHorizontal, Settings, X, Edit2, Trash2, Copy, Camera,
   ChevronRight, Home, BookOpen, BarChart2, Download, Eye,
@@ -900,8 +906,8 @@ export function ScreenerPanel({ rows, loading, filters, setFilters, savedFilters
                     <div style={{ fontSize: 12.5, color: "var(--text-dim)" }}>{row.name || row.symbol}</div>
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    <div className="tj-mono" style={{ fontSize: 14, fontWeight: 600 }}>{price ? `$${price.toFixed(2)}` : "—"}</div>
-                    <div style={{ fontSize: 12, color: change >= 0 ? "var(--profit)" : "var(--loss)" }}>{change >= 0 ? "+" : ""}{change.toFixed(2)}%</div>
+                    <div className="tj-mono" style={{ fontSize: 14, fontWeight: 600 }}>{price != null ? `$${formatNumber(price)}` : "—"}</div>
+                    <div style={{ fontSize: 12, color: change >= 0 ? "var(--profit)" : "var(--loss)" }}>{change != null ? `${change >= 0 ? "+" : ""}${formatNumber(change)}%` : "—"}</div>
                   </div>
                 </div>
                 <div style={{ marginTop: 10 }}>

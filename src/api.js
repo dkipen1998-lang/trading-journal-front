@@ -205,12 +205,7 @@ async function request(path, options = {}) {
 }
 
 async function requestFinnhub(path) {
-  const isDemoKey = (FINNHUB_API_KEY || '').trim().toLowerCase() === 'demo';
-  if (isDemoKey) {
-    return null;
-  }
-
-  const url = `${FINNHUB_BASE}${path}${path.includes('?') ? '&' : '?'}token=${FINNHUB_API_KEY}`;
+  const url = `/api/market${path}`;
   try {
     const response = await fetch(url);
     if (!response.ok) {
@@ -308,7 +303,7 @@ export async function fetchStockSnapshot(symbol, options = {}) {
   }
 
   const finnhubQuote = await requestFinnhub(`/quote?symbol=${encodeURIComponent(normalizedSymbol)}`);
-  const profile = await requestFinnhub(`/stock/profile2?symbol=${encodeURIComponent(normalizedSymbol)}`);
+  const profile = await requestFinnhub(`/profile?symbol=${encodeURIComponent(normalizedSymbol)}`);
   const quote = finnhubQuote || null;
   const preMarketPrice = finnhubQuote?.preMarketPrice ?? finnhubQuote?.preMarket ?? finnhubQuote?.preMarketStart ?? quote?.preMarketPrice ?? null;
   const preMarketChange = finnhubQuote?.preMarketChange ?? quote?.preMarketChange ?? null;
@@ -415,7 +410,7 @@ export async function fetchHistoricalCandles(symbol, timeframe = '1h', limit = 8
 
   if (!useBinance) {
     const resolution = mapTimeframeToFinnhubResolution(timeframe);
-    const candleData = await requestFinnhub(`/stock/candle?symbol=${encodeURIComponent(normalizedSymbol)}&resolution=${resolution}&from=${from}&to=${now}`);
+    const candleData = await requestFinnhub(`/candles?symbol=${encodeURIComponent(normalizedSymbol)}&resolution=${resolution}&from=${from}&to=${now}`);
     if (candleData && candleData.s === 'ok' && Array.isArray(candleData.t)) {
       return candleData.t.map((timestamp, index) => ({
         time: Math.floor(Number(timestamp)),
