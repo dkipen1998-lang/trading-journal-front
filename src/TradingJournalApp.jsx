@@ -2331,9 +2331,9 @@ export default function TradingJournalApp() {
     if (deferredSearch.trim()) {
       const q = deferredSearch.toLowerCase();
       out = out.filter((trade) =>
-        trade.ticker.toLowerCase().includes(q) ||
-        (trade.notes || "").toLowerCase().includes(q) ||
-        (trade.tags || []).some((tag) => tag.toLowerCase().includes(q))
+        String(trade.ticker || "").toLowerCase().includes(q) ||
+        String(trade.notes || "").toLowerCase().includes(q) ||
+        (trade.tags || []).some((tag) => String(tag || "").toLowerCase().includes(q))
       );
     }
     if (filters.status !== "all") out = out.filter((trade) => trade.status === filters.status);
@@ -3033,11 +3033,11 @@ function computeStats(trades, defaultRiskPerTrade, accountSize) {
   const now = new Date();
   const todayKey = getTodayKey();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const todayPnl = closed.reduce((sum, trade) => (trade.exitDate === todayKey ? sum + trade.pnl : sum), 0);
+  const todayPnl = closed.reduce((sum, trade) => (trade.exitDate === todayKey ? sum + Number(trade.pnl || 0) : sum), 0);
   const monthPnl = closed.reduce((sum, trade) => {
     if (!trade.exitDate) return sum;
     const exitDate = new Date(`${trade.exitDate}T00:00:00`);
-    return exitDate >= monthStart && exitDate <= now ? sum + trade.pnl : sum;
+    return exitDate >= monthStart && exitDate <= now ? sum + Number(trade.pnl || 0) : sum;
   }, 0);
   const totalPnlPct = closed.reduce((sum, trade) => sum + (trade.pnlPercent || 0), 0);
   const wins = adjustedPnls.filter((value) => value > 0);
@@ -3064,17 +3064,24 @@ function computeStats(trades, defaultRiskPerTrade, accountSize) {
   });
 
   let equity = 0;
-  const equityCurve = chrono.map((trade) => { equity += trade.pnl; return { date: trade.exitDate, equity: +equity.toFixed(2) }; });
+  const equityCurve = chrono.map((trade) => {
+    const pnlValue = Number(trade.pnl || 0);
+    equity += pnlValue;
+    return { date: trade.exitDate, equity: +equity.toFixed(2) };
+  });
 
   const byDayMap = {};
-  chrono.forEach((trade) => { byDayMap[trade.exitDate] = (byDayMap[trade.exitDate] || 0) + trade.pnl; });
+  chrono.forEach((trade) => {
+    const pnlValue = Number(trade.pnl || 0);
+    byDayMap[trade.exitDate] = (byDayMap[trade.exitDate] || 0) + pnlValue;
+  });
   const byDay = Object.entries(byDayMap).map(([date, pnl]) => ({ date, pnl: +pnl.toFixed(2) }));
 
   const byDayPnlMap = {};
   chrono.forEach((trade) => {
     const day = trade.exitDate || "";
     if (!byDayPnlMap[day]) byDayPnlMap[day] = { date: day, pnl: 0 };
-    byDayPnlMap[day].pnl += trade.pnl;
+    byDayPnlMap[day].pnl += Number(trade.pnl || 0);
   });
   const byDayEquity = Object.values(byDayPnlMap)
     .sort((a, b) => a.date.localeCompare(b.date))

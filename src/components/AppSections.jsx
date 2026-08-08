@@ -202,19 +202,22 @@ function inferScreenerInstrumentType(symbol) {
 function resolveTradeMetrics(trade, snapshot) {
   if (!trade || trade.status !== "open") return { pnl: trade?.pnl ?? null, pnlPercent: trade?.pnlPercent ?? null, rMultiple: trade?.rMultiple ?? null };
   const currentPrice = snapshot?.price ?? trade?.currentPrice ?? null;
-  if (currentPrice == null || trade.entryPrice == null || trade.positionSize == null || trade.positionSize === "") return { pnl: trade?.pnl ?? null, pnlPercent: trade?.pnlPercent ?? null, rMultiple: trade?.rMultiple ?? null };
-  const entryPrice = Number(trade.entryPrice);
-  const size = Number(trade.positionSize);
-  const pnl = (currentPrice - entryPrice) * size;
-  const pnlPercent = entryPrice ? (pnl / (entryPrice * size)) * 100 : null;
-  const rMultiple = trade.riskDollar && Number(trade.riskDollar) ? pnl / Number(trade.riskDollar) : null;
+  const entry = Number(trade.entryPrice);
+  const size = Number(trade.positionSize ?? 0);
+  if (!Number.isFinite(currentPrice) || !Number.isFinite(entry) || !Number.isFinite(size) || size === 0) {
+    return { pnl: trade?.pnl ?? null, pnlPercent: trade?.pnlPercent ?? null, rMultiple: trade?.rMultiple ?? null };
+  }
+  const pnl = (currentPrice - entry) * size;
+  const pnlPercent = entry ? (pnl / (entry * size)) * 100 : null;
+  const rMultiple = Number.isFinite(Number(trade.riskDollar)) && Number(trade.riskDollar) !== 0 ? pnl / Number(trade.riskDollar) : null;
   return { pnl: +pnl.toFixed(2), pnlPercent: pnlPercent != null ? +pnlPercent.toFixed(2) : null, rMultiple: rMultiple != null ? +rMultiple.toFixed(2) : null };
 }
 function calcPnl(trade) {
-  if (!trade || trade.entryPrice == null || trade.exitPrice == null) return { pnl: null, pnlPct: null, r: null };
+  if (!trade) return { pnl: null, pnlPct: null, r: null };
   const entry = Number(trade.entryPrice);
   const exit = Number(trade.exitPrice);
-  const size = Number(trade.positionSize || 1);
+  const size = Number(trade.positionSize ?? 1);
+  if (!Number.isFinite(entry) || !Number.isFinite(exit) || !Number.isFinite(size) || size === 0) return { pnl: null, pnlPct: null, r: null };
   const normalizedSide = `${trade.side ?? "long"}`.toLowerCase();
   const dir = normalizedSide === "short" || normalizedSide === "sell" ? -1 : 1;
   const pnl = (exit - entry) * size * dir;
