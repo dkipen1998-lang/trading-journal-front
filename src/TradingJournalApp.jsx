@@ -2141,6 +2141,9 @@ export default function TradingJournalApp() {
   async function closeTradeById(id, data) {
     try {
       const trade = trades.find((item) => item.id === id);
+      if (!trade) {
+        throw new Error("Trade not found");
+      }
       const merged = { ...trade, ...data };
       const { pnl, pnlPct, r } = calcPnl(merged);
       const payload = {
@@ -2160,19 +2163,22 @@ export default function TradingJournalApp() {
       setDetailId(null);
       showToast(t.tradeClosed);
     } catch (err) {
+      console.error('closeTradeById error', err);
       const trade = trades.find((item) => item.id === id);
-      const merged = { ...trade, ...data };
-      const { pnl, pnlPct, r } = calcPnl(merged);
-      updateTradeById(id, {
-        ...data,
-        status: "closed",
-        pnl: data.pnl !== "" && data.pnl != null ? Number(data.pnl) : (pnl != null ? +pnl.toFixed(2) : null),
-        pnlPercent: data.pnlPercent !== "" && data.pnlPercent != null ? Number(data.pnlPercent) : (pnlPct != null ? +pnlPct.toFixed(2) : null),
-        rMultiple: data.rMultiple !== "" && data.rMultiple != null ? Number(data.rMultiple) : (r != null ? +r.toFixed(2) : null),
-      });
+      if (trade) {
+        const merged = { ...trade, ...data };
+        const { pnl, pnlPct, r } = calcPnl(merged);
+        updateTradeById(id, {
+          ...data,
+          status: "closed",
+          pnl: data.pnl !== "" && data.pnl != null ? Number(data.pnl) : (pnl != null ? +pnl.toFixed(2) : null),
+          pnlPercent: data.pnlPercent !== "" && data.pnlPercent != null ? Number(data.pnlPercent) : (pnlPct != null ? +pnlPct.toFixed(2) : null),
+          rMultiple: data.rMultiple !== "" && data.rMultiple != null ? Number(data.rMultiple) : (r != null ? +r.toFixed(2) : null),
+        });
+      }
       setCloseId(null);
       setDetailId(null);
-      showToast(err.message || t.failedCloseTrade);
+      showToast(err?.message || t.failedCloseTrade);
     }
   }
 

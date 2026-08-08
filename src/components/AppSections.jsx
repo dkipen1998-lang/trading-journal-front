@@ -1157,6 +1157,9 @@ export function Row2({ children }) { return <div style={{ display: "grid", gridT
 export function NumField({ label, value, onChange, onBlur }) { return <div><label className="tj-label">{label}</label><input className="tj-input tj-input-compact tj-mono" type="number" inputMode="decimal" value={value} onChange={(event) => onChange(event.target.value)} onBlur={onBlur} placeholder="0.00" style={{ minHeight: 30, padding: "6px 8px", fontSize: 12.5 }} /></div>; }
 
 export function CloseTradeForm({ trade, onClose, onSubmit, t }) {
+  if (!trade) {
+    return null;
+  }
   const [form, setForm] = useState({ exitPrice: "", exitDate: todayISO(), exitTime: nowTime(), exitReason: "", pnl: "", pnlPercent: "", rMultiple: "", exitScreenshot: null, postComment: "" });
   const fileRef = useRef();
   const labels = t || FALLBACK_LABELS;
