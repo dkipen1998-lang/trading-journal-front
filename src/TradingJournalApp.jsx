@@ -15,6 +15,7 @@ import {
   TradeForm,
   CloseTradeForm,
   FilterSheet,
+  SheetHeader,
   NavItem,
   TickerTape,
 } from "./components/AppSections";
@@ -925,21 +926,35 @@ const STYLE = `
 `;
 
 const uid = () => Math.random().toString(36).slice(2, 10);
-const todayISO = () => new Date().toISOString().slice(0, 10);
-const nowTime = () => new Date().toTimeString().slice(0, 5);
+const todayISO = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+};
+const nowTime = () => {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+};
 const fmt2 = (n) => {
   if (n == null || Number.isNaN(Number(n))) return "—";
   return (Math.round((Number(n) + Number.EPSILON) * 100) / 100).toLocaleString();
 };
 const cls = (...a) => a.filter(Boolean).join(" ");
+const parseDateValue = (value) => {
+  if (!value) return null;
+  const normalized = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    const [year, month, day] = normalized.split("-").map(Number);
+    const date = new Date(year, month - 1, day);
+    return Number.isFinite(date.getTime()) ? date : null;
+  }
+  const normalizedDateTime = normalized.replace(" ", "T");
+  const date = new Date(normalizedDateTime);
+  return Number.isFinite(date.getTime()) ? date : null;
+};
 const formatDateOnly = (value) => {
-  if (!value) return "";
-  const dateString = String(value).trim();
-  const match = dateString.match(/^(\d{4}-\d{2}-\d{2})/);
-  if (match) return match[1];
-  const date = new Date(dateString);
-  if (!Number.isFinite(date.getTime())) return dateString;
-  return date.toISOString().slice(0, 10);
+  const date = parseDateValue(value);
+  if (!date) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 };
 const formatDateTime = (date, time) => {
   const formattedDate = formatDateOnly(date);
@@ -1616,9 +1631,10 @@ export default function TradingJournalApp() {
         if (typeof window !== "undefined" && (hasStoredToken || hasStoredLocalData)) {
           const localTrades = readLocalTrades();
           const localProfiles = readLocalProfiles();
+          const lastSync = readLocalTradesLastSync();
 
           const [remoteTradesResponse, remoteProfilesResponse] = await Promise.all([
-            fetchTrades(activeProfileId),
+            fetchTrades(activeProfileId, { updatedSince: lastSync }),
             fetchProfiles(),
           ]);
           const normalizedRemoteTrades = Array.isArray(remoteTradesResponse) ? remoteTradesResponse : [];
@@ -1630,19 +1646,16 @@ export default function TradingJournalApp() {
           if (mergedTrades.length > 0) {
             setTrades(mergedTrades);
           } else if (localTrades.length > 0) {
-            await Promise.all(localTrades.map((trade) => createTrade(trade)));
-            const [syncedTrades] = await Promise.all([fetchTrades(activeProfileId)]);
-            const syncedItems = Array.isArray(syncedTrades) ? syncedTrades : [];
-            setTrades(syncedItems);
+            setTrades(localTrades);
           }
 
           if (mergedProfiles.length > 0) {
             setProfiles(mergedProfiles);
           } else if (localProfiles.length > 0) {
-            await Promise.all(localProfiles.map((profile) => createProfile(profile)));
-            const syncedProfiles = await fetchProfiles();
-            setProfiles(Array.isArray(syncedProfiles) ? syncedProfiles : []);
+            setProfiles(localProfiles);
           }
+
+          writeLocalTradesLastSync(new Date().toISOString());
         }
 
         if (telegramApp) {
@@ -1697,6 +1710,7 @@ export default function TradingJournalApp() {
   useEffect(() => {
     try {
       persistLocalTrades(trades);
+      writeLocalTradesLastSync(new Date().toISOString());
     } catch {
       // ignore persistence failures
     }
@@ -3001,8 +3015,8 @@ function computePeriodPnl(trades, period, defaultRiskPerTrade) {
 
   const filtered = closed.filter((trade) => {
     if (!startDate) return true;
-    const tradeDate = new Date(`${trade.exitDate}T00:00:00`);
-    return tradeDate >= startDate && tradeDate <= now;
+    const tradeDate = parseDateValue(trade.exitDate);
+    return tradeDate ? tradeDate >= startDate && tradeDate <= now : false;
   });
 
   const adjustedPnls = filtered.map((trade) => getRiskAdjustedPnl(trade, defaultRiskPerTrade));
@@ -3066,11 +3080,14 @@ function computeStats(trades, defaultRiskPerTrade, accountSize) {
   const now = new Date();
   const todayKey = getTodayKey();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const todayPnl = closed.reduce((sum, trade) => (trade.exitDate === todayKey ? sum + Number(trade.pnl || 0) : sum), 0);
+  const todayPnl = closed.reduce((sum, trade) => {
+    const exitDate = parseDateValue(trade.exitDate);
+    return exitDate && formatDateOnly(exitDate) === todayKey ? sum + Number(trade.pnl || 0) : sum;
+  }, 0);
   const monthPnl = closed.reduce((sum, trade) => {
     if (!trade.exitDate) return sum;
-    const exitDate = new Date(`${trade.exitDate}T00:00:00`);
-    return exitDate >= monthStart && exitDate <= now ? sum + Number(trade.pnl || 0) : sum;
+    const exitDate = parseDateValue(trade.exitDate);
+    return exitDate && exitDate >= monthStart && exitDate <= now ? sum + Number(trade.pnl || 0) : sum;
   }, 0);
   const totalPnlPct = closed.reduce((sum, trade) => sum + (trade.pnlPercent || 0), 0);
   const wins = adjustedPnls.filter((value) => value > 0);

@@ -51,6 +51,7 @@ const LOCAL_TRADES_KEY = 'tj-trades';
 const LOCAL_PROFILES_KEY = 'tj-profiles';
 const LOCAL_TRADES_HASH_KEY = 'tj-trades-hash';
 const LOCAL_PROFILES_HASH_KEY = 'tj-profiles-hash';
+const LOCAL_TRADES_LAST_SYNC_KEY = 'tj-trades-last-sync';
 
 function normalizeLocalCollection(value) {
   if (!value) return [];
@@ -138,6 +139,28 @@ export function persistLocalProfiles(profiles) {
 
 export function persistLocalTrades(trades) {
   writeLocalTrades(trades);
+}
+
+export function readLocalTradesLastSync() {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem(LOCAL_TRADES_LAST_SYNC_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function writeLocalTradesLastSync(value) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (value == null) {
+      window.localStorage.removeItem(LOCAL_TRADES_LAST_SYNC_KEY);
+    } else {
+      window.localStorage.setItem(LOCAL_TRADES_LAST_SYNC_KEY, String(value));
+    }
+  } catch {
+    // ignore write failures
+  }
 }
 
 function upsertLocalTrade(trade) {
@@ -553,8 +576,27 @@ function normalizeTradeCollection(payload) {
   return [];
 }
 
-export async function fetchTrades(profileId) {
-  const query = profileId ? `?profileId=${encodeURIComponent(profileId)}` : '';
+export async function fetchTrades(profileId, options = {}) {
+  const queryParts = [];
+  if (profileId) {
+    queryParts.push(`profileId=${encodeURIComponent(profileId)}`);
+  }
+  if (options.updatedSince) {
+    queryParts.push(`updatedSince=${encodeURIComponent(options.updatedSince)}`);
+  }
+  if (options.dateFrom) {
+    queryParts.push(`dateFrom=${encodeURIComponent(options.dateFrom)}`);
+  }
+  if (options.dateTo) {
+    queryParts.push(`dateTo=${encodeURIComponent(options.dateTo)}`);
+  }
+  if (options.page != null) {
+    queryParts.push(`page=${encodeURIComponent(options.page)}`);
+  }
+  if (options.limit != null) {
+    queryParts.push(`limit=${encodeURIComponent(options.limit)}`);
+  }
+  const query = queryParts.length ? `?${queryParts.join('&')}` : '';
   const token = getToken();
   const localTrades = readLocalTrades();
   if (!token) {
@@ -564,10 +606,7 @@ export async function fetchTrades(profileId) {
   try {
     const response = await request(`/trades${query}`);
     const normalized = normalizeTradeCollection(response);
-    if (normalized.length > 0) {
-      return normalized;
-    }
-    return localTrades;
+    return normalized;
   } catch {
     return localTrades;
   }

@@ -146,20 +146,34 @@ const FALLBACK_LABELS = {
 };
 
 const uid = () => Math.random().toString(36).slice(2, 10);
-const todayISO = () => new Date().toISOString().slice(0, 10);
-const nowTime = () => new Date().toTimeString().slice(0, 5);
+const todayISO = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+};
+const nowTime = () => {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+};
 const fmt2 = (n) => {
   if (n == null || Number.isNaN(Number(n))) return "—";
   return (Math.round((Number(n) + Number.EPSILON) * 100) / 100).toLocaleString();
 };
+const parseDateValue = (value) => {
+  if (!value) return null;
+  const normalized = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    const [year, month, day] = normalized.split("-").map(Number);
+    const date = new Date(year, month - 1, day);
+    return Number.isFinite(date.getTime()) ? date : null;
+  }
+  const normalizedDateTime = normalized.replace(" ", "T");
+  const date = new Date(normalizedDateTime);
+  return Number.isFinite(date.getTime()) ? date : null;
+};
 const formatDateOnly = (value) => {
-  if (!value) return "";
-  const dateString = String(value).trim();
-  const match = dateString.match(/^(\d{4}-\d{2}-\d{2})/);
-  if (match) return match[1];
-  const date = new Date(dateString);
-  if (!Number.isFinite(date.getTime())) return dateString;
-  return date.toISOString().slice(0, 10);
+  const date = parseDateValue(value);
+  if (!date) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 };
 const formatDateTime = (date, time) => {
   const formattedDate = formatDateOnly(date);
