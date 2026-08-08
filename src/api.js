@@ -1,6 +1,4 @@
-const API_BASE = import.meta.env.DEV
-  ? '/api'
-  : import.meta.env.VITE_API_URL || (typeof window !== 'undefined' ? `${window.location.origin}/api` : '/api');
+const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api' : (typeof window !== 'undefined' ? `${window.location.origin}/api` : '/api'));
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const FINNHUB_API_KEY = import.meta.env.VITE_FINNHUB_API_KEY || 'demo';
 
@@ -125,7 +123,12 @@ async function request(path, options = {}) {
     ...(options.headers || {}),
   };
 
-  const response = await fetch(`${API_BASE}${path}`, {
+  const url = `${API_BASE}${path}`;
+  if (typeof window !== 'undefined' && isAuthLoginRequest) {
+    console.info('[auth] sending request', { path, url, body: options.body });
+  }
+
+  const response = await fetch(url, {
     ...options,
     headers,
   });

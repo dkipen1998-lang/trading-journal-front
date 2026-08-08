@@ -1456,8 +1456,18 @@ export default function TradingJournalApp() {
         const telegramApp = typeof window !== "undefined" ? window.Telegram?.WebApp : null;
         const hasStoredToken = Boolean(typeof window !== "undefined" ? window.localStorage.getItem("tj_token") : "");
 
+        if (typeof window !== "undefined") {
+          console.info('[auth] initData load', { initData, hasStoredToken, telegramReady: Boolean(telegramApp) });
+        }
+
         if (initData) {
-          await loginWithTelegram(initData);
+          const result = await loginWithTelegram(initData);
+          if (result?.token || (typeof window !== "undefined" && window.localStorage.getItem("tj_token"))) {
+            setIsAuthenticated(true);
+          }
+          if (result?.user) {
+            setUser(result.user);
+          }
         }
 
         if (typeof window !== "undefined" && window.localStorage.getItem("tj_token")) {
