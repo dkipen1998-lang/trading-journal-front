@@ -546,37 +546,38 @@ export function ChatScreen({ t }) {
         <div className="tj-display" style={{ fontSize: 20, fontWeight: 700 }}>{labels.chat || "AI Chat"}</div>
       </div>
 
-      <div className="tj-card" style={{ margin: "12px 16px", padding: 14 }}>
+      <div style={{ padding: "12px 16px 0" }}>
+        {error && <div style={{ color: "var(--loss)", marginBottom: 12 }}>{error}</div>}
+
         {messages.length === 0 && !loading && !error && (
-          <div style={{ color: "var(--text-dim)" }}>{labels.chatEmpty || "Ask something to start the conversation."}</div>
+          <div style={{ color: "var(--text-dim)", padding: "24px 0 0" }}>{labels.chatEmpty || "Ask something to start the conversation."}</div>
         )}
 
-        {messages.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {messages.map((message, index) => (
-              <div
-                key={`${message.role}-${index}`}
-                className="tj-card"
-                style={{
-                  padding: 12,
-                  background: message.role === 'assistant' ? 'var(--surface-2)' : 'var(--surface)',
-                  border: message.role === 'user' ? '1px solid var(--border)' : '1px solid transparent',
-                }}
-              >
-                <div style={{ fontSize: 11, color: "var(--text-faint)", marginBottom: 6 }}>
-                  {message.role === 'assistant' ? labels.assistantLabel || 'Assistant' : labels.userLabel || 'You'}
-                </div>
-                <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 14, color: 'var(--text)' }}>
-                  {message.text}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 24 }}>
+          {messages.map((message, index) => (
+            <div
+              key={`${message.role}-${index}`}
+              style={{
+                alignSelf: message.role === 'assistant' ? 'flex-start' : 'flex-end',
+                maxWidth: '82%',
+                background: message.role === 'assistant' ? 'rgba(255,255,255,0.05)' : 'rgba(46, 125, 233, 0.15)',
+                color: 'var(--text)',
+                padding: '12px 14px',
+                borderRadius: 18,
+                borderTopLeftRadius: message.role === 'assistant' ? 2 : 18,
+                borderTopRightRadius: message.role === 'assistant' ? 18 : 2,
+                wordBreak: 'break-word',
+                whiteSpace: 'pre-wrap',
+                fontSize: 14,
+                lineHeight: 1.6,
+              }}
+            >
+              {message.text}
+            </div>
+          ))}
+        </div>
 
-        {error && <div style={{ color: "var(--loss)", marginTop: 10 }}>{error}</div>}
-
-        <div style={{ marginTop: 16, position: 'relative' }}>
+        <div style={{ marginTop: 8, position: 'relative' }}>
           <textarea
             className="tj-input"
             rows={2}

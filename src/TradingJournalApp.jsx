@@ -779,7 +779,7 @@ const STYLE = `
 }
 .tj-fab {
   position: fixed;
-  bottom: 84px;
+  bottom: 120px; /* moved higher to avoid bottom panel overlap */
   right: calc(50% - 210px + 18px);
   background: var(--accent);
   color: #1A1305;
@@ -787,7 +787,7 @@ const STYLE = `
   width: 48px; height: 48px;
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 8px 24px rgba(232,163,61,0.35);
-  z-index: 40;
+  z-index: 60; /* ensure it sits above bottom panels */
 }
 @media (max-width: 460px) { .tj-fab { right: 18px; } }
 
@@ -2612,9 +2612,6 @@ export default function TradingJournalApp() {
                       {(user.firstName || user.username || "U").charAt(0).toUpperCase()}
                     </div>
                   )}
-                  <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>
-                    {user.firstName || user.username || "User"}
-                  </span>
                 </button>
                 {profileMenuOpen && (
                   <div
@@ -2949,9 +2946,11 @@ export default function TradingJournalApp() {
         </>
       )}
 
-        <button className="tj-fab" onClick={() => setNewOpen(true)} aria-label="New trade">
-          <Plus size={22} strokeWidth={2.2} />
-        </button>
+        {tab !== "news" && (
+          <button className="tj-fab" onClick={() => setNewOpen(true)} aria-label="New trade">
+            <Plus size={22} strokeWidth={2.2} />
+          </button>
+        )}
 
         <nav className="tj-navbar">
           <NavItem icon={Home} label={t.dashboard} active={tab === "dashboard"} onClick={() => setTab("dashboard")} />
