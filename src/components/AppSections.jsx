@@ -108,7 +108,7 @@ const FALLBACK_LABELS = {
   refreshNews: "Refresh",
   chat: "AI Chat",
   sendMessage: "Send",
-  messagePlaceholder: "Ask ChatGPT about trading...",
+  messagePlaceholder: "",
   chatEmpty: "Ask something to start the conversation.",
   assistantLabel: "Assistant",
   userLabel: "You",
@@ -581,7 +581,7 @@ export function ChatScreen({ t }) {
           <textarea
             className="tj-input"
             rows={2}
-            placeholder={labels.messagePlaceholder || "Ask ChatGPT about trading..."}
+            placeholder={labels.messagePlaceholder || ""}
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={(event) => {
