@@ -1775,6 +1775,71 @@ export default function TradingJournalApp() {
             // ignore Telegram WebApp bootstrap issues
           }
         }
+
+        // Install lightweight filters to reduce noisy console errors coming from
+        // Telegram inpage scripts / websockets (inpage.js, zws2.web.telegram.org, MTProto sender).
+        // We do not silence all errors — only known noisy patterns that are not actionable
+        // from the app code. This prevents cluttering the console while preserving
+        // genuine app errors.
+        try {
+          const TELE_NOISE_PATTERNS = [
+            'inpage.js',
+            'in-page-channel-node-id',
+            'in_page_channel_node_id',
+            'zws2.web.telegram.org',
+            'mtpproto',
+            'mtpproto',
+            'promisedwebsockets',
+            'not connected',
+          ];
+
+          const filterErrorEvent = (ev) => {
+            try {
+              const msg = String(ev?.message || ev?.error?.message || '') || '';
+              const file = String(ev?.filename || '') || '';
+              const combined = `${msg} ${file}`.toLowerCase();
+              const noisy = TELE_NOISE_PATTERNS.some((p) => combined.includes(p));
+              if (noisy) {
+                // Prevent the browser from logging this as an uncaught error.
+                if (typeof ev.preventDefault === 'function') ev.preventDefault();
+                // Keep a lightweight debug entry instead of a full error flood.
+                console.debug('[tele-noise] suppressed error:', msg || file);
+              }
+            } catch (e) {
+              // ignore filter failures
+            }
+          };
+
+          const filterRejectionEvent = (ev) => {
+            try {
+              const reason = ev?.reason;
+              const text = String((typeof reason === 'string' ? reason : reason?.message) || '').toLowerCase();
+              const noisy = TELE_NOISE_PATTERNS.some((p) => text.includes(p));
+              if (noisy) {
+                if (typeof ev.preventDefault === 'function') ev.preventDefault();
+                console.debug('[tele-noise] suppressed rejection:', text);
+              }
+            } catch (e) {
+              // ignore
+            }
+          };
+
+          window.addEventListener('error', filterErrorEvent, true);
+          window.addEventListener('unhandledrejection', filterRejectionEvent, true);
+
+          // cleanup on unload/unmount
+          const removeFilters = () => {
+            try {
+              window.removeEventListener('error', filterErrorEvent, true);
+              window.removeEventListener('unhandledrejection', filterRejectionEvent, true);
+            } catch {}
+          };
+          // remove when page is hidden/unloaded
+          window.addEventListener('beforeunload', removeFilters, { once: true });
+
+        } catch (e) {
+          // non-fatal
+        }
       } catch (e) {
         const storedTrades = typeof window !== "undefined" ? window.localStorage.getItem("tj-trades") : null;
         const storedTags = typeof window !== "undefined" ? window.localStorage.getItem("tj-tags") : null;
