@@ -1,6 +1,10 @@
-const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api' : (typeof window !== 'undefined' ? `${window.location.origin}/api` : '/api'));
+const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api' : 'https://trading-journal-backend-eili.onrender.com/api');
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const FINNHUB_API_KEY = import.meta.env.VITE_FINNHUB_API_KEY || 'demo';
+
+if (!import.meta.env.DEV && !import.meta.env.VITE_API_URL) {
+  console.warn('[api] VITE_API_URL is not defined; using fallback backend URL.');
+}
 
 function getToken() {
   return localStorage.getItem('tj_token') || '';
