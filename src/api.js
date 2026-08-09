@@ -116,6 +116,25 @@ function isStatusNotFound(status) {
   return typeof status === 'string' && status.trim().toLowerCase() === 'not found';
 }
 
+// Detect whether an error corresponds to a "not found" (404) from the API or
+// a message that contains "not found". This is used to clean up local cache
+// entries when the server reports a resource is missing.
+function isNotFoundError(error) {
+  if (!error) return false;
+  // fetch / server error objects sometimes have a numeric status
+  if (typeof error === 'object') {
+    if (error.status === 404) return true;
+    if (error.response && error.response.status === 404) return true;
+    const msg = String(error.message || error.error || '').toLowerCase();
+    if (msg.includes('not found')) return true;
+  }
+  // plain strings
+  if (typeof error === 'string') {
+    return /not\s*found/i.test(error);
+  }
+  return false;
+}
+
 function filterNotFoundTrades(trades) {
   if (!Array.isArray(trades)) return [];
   const clean = trades.filter((trade) => !isStatusNotFound(trade?.status));
