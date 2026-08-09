@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useDeferredValue } from "react";
-import { loginWithTelegram, fetchTrades, fetchProfiles, createProfile, updateProfile, createTrade, updateTrade, closeTrade, deleteTrade, deleteProfile, duplicateTrade, fetchStockSnapshot, fetchTopBinanceVolumeSymbols, clearToken, getUser, setUser, readLocalTrades, readLocalProfiles, persistLocalTrades, persistLocalProfiles } from "./api";
+import { loginWithTelegram, fetchTrades, fetchProfiles, createProfile, updateProfile, createTrade, updateTrade, closeTrade, deleteTrade, deleteProfile, duplicateTrade, fetchStockSnapshot, fetchTopBinanceVolumeSymbols, clearToken, getUser, setUser, readLocalTrades, readLocalTradesLastSync, writeLocalTradesLastSync, readLocalProfiles, persistLocalTrades, persistLocalProfiles } from "./api";
 import {
   Plus, Search, SlidersHorizontal, Settings, X, Edit2, Trash2, Copy, Camera,
   ChevronRight, Home, BookOpen, BarChart2, Download, Eye, MessageSquare,
