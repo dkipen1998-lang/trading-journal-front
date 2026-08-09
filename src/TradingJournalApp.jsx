@@ -1414,8 +1414,6 @@ export default function TradingJournalApp() {
   const [trades, setTrades] = useState(() => {
     if (typeof window === "undefined") return seedTrades();
     try {
-      const hasAuthToken = Boolean(window.localStorage.getItem("tj_token"));
-      if (hasAuthToken) return [];
       const saved = readLocalTrades();
       return saved.length ? saved : seedTrades();
     } catch {
@@ -1707,7 +1705,14 @@ export default function TradingJournalApp() {
     })();
   }, []);
 
+  const tradesInitializedRef = useRef(false);
+
   useEffect(() => {
+    if (!tradesInitializedRef.current) {
+      tradesInitializedRef.current = true;
+      return;
+    }
+
     try {
       persistLocalTrades(trades);
       writeLocalTradesLastSync(new Date().toISOString());
