@@ -793,36 +793,36 @@ const STYLE = `
 
 .tj-navbar {
   position: fixed;
-  bottom: 12px;
+  bottom: 8px;
   left: 50%;
   transform: translateX(-50%);
-  width: calc(100% - 36px);
-  max-width: 380px;
+  width: calc(100% - 28px);
+  max-width: 360px;
   z-index: 40;
   box-sizing: border-box;
-  padding: 10px;
+  padding: 8px;
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
   justify-content: space-between;
-  border-radius: 14px;
-  background: linear-gradient(180deg, rgba(20,24,29,0.75), rgba(11,13,16,0.85));
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(20,24,29,0.82), rgba(11,13,16,0.9));
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  box-shadow: 0 10px 30px rgba(3,6,12,0.6), inset 0 1px 0 rgba(255,255,255,0.02);
+  box-shadow: 0 10px 26px rgba(3,6,12,0.55), inset 0 1px 0 rgba(255,255,255,0.04);
 }
 .tj-navitem {
-  flex: 0 1 70px;
-  min-width: 64px;
-  max-width: 84px;
+  flex: 0 1 64px;
+  min-width: 56px;
+  max-width: 72px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 3px;
   color: var(--text-dim);
   font-size: 10px;
-  padding: 4px 6px;
-  border-radius: 10px;
+  padding: 6px 6px;
+  border-radius: 12px;
   background: linear-gradient(180deg,#ffffff,#f5f5f5);
   border: 1px solid rgba(0,0,0,0.06);
   box-shadow: 0 4px 10px rgba(0,0,0,0.1);
