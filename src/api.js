@@ -112,19 +112,32 @@ function writeLocalProfiles(profiles) {
   window.localStorage.setItem(LOCAL_PROFILES_KEY, JSON.stringify(profiles));
 }
 
+function isStatusNotFound(status) {
+  return typeof status === 'string' && status.trim().toLowerCase() === 'not found';
+}
+
+function filterNotFoundTrades(trades) {
+  if (!Array.isArray(trades)) return [];
+  const clean = trades.filter((trade) => !isStatusNotFound(trade?.status));
+  if (clean.length !== trades.length) {
+    writeLocalTrades(clean);
+  }
+  return clean;
+}
+
 export function readLocalTrades() {
   if (typeof window === 'undefined') return [];
   try {
     const hashRaw = window.localStorage.getItem(LOCAL_TRADES_HASH_KEY);
     if (hashRaw) {
-      return normalizeLocalCollection(JSON.parse(hashRaw));
+      return filterNotFoundTrades(normalizeLocalCollection(JSON.parse(hashRaw)));
     }
     const raw = window.localStorage.getItem(LOCAL_TRADES_KEY);
     const arrayData = normalizeLocalCollection(JSON.parse(raw || '[]'));
     if (raw) {
       migrateCollectionToHash(raw, LOCAL_TRADES_HASH_KEY);
     }
-    return arrayData;
+    return filterNotFoundTrades(arrayData);
   } catch {
     return [];
   }
@@ -169,6 +182,12 @@ export function writeLocalTradesLastSync(value) {
 
 function upsertLocalTrade(trade) {
   if (!trade || typeof trade !== 'object') return null;
+  if (isStatusNotFound(trade.status)) {
+    if (trade.id) {
+      removeLocalTrade(trade.id);
+    }
+    return null;
+  }
   const normalizedTrade = { ...trade, id: trade.id || generateId() };
   const trades = readLocalTrades();
   const existingIndex = trades.findIndex((item) => item.id === normalizedTrade.id);
@@ -179,7 +198,7 @@ function upsertLocalTrade(trade) {
   return normalizedTrade;
 }
 
-function removeLocalTrade(id) {
+export function removeLocalTrade(id) {
   if (!id) return null;
   const trades = readLocalTrades();
   const nextTrades = trades.filter((item) => item.id !== id);
@@ -748,14 +767,22 @@ export async function updateTrade(id, trade) {
     return nextTrades.find((item) => item.id === id);
   }
 
-  const updated = await request(`/trades/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify(trade),
-  });
-  if (updated && typeof updated === 'object') {
-    upsertLocalTrade({ ...updated, id: updated.id || id });
+  try {
+    const updated = await request(`/trades/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(trade),
+    });
+    if (updated && typeof updated === 'object') {
+      upsertLocalTrade({ ...updated, id: updated.id || id });
+    }
+    return updated;
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      removeLocalTrade(id);
+      return null;
+    }
+    throw error;
   }
-  return updated;
 }
 
 export async function closeTrade(id, payload) {
@@ -768,14 +795,22 @@ export async function closeTrade(id, payload) {
     return nextTrades.find((item) => item.id === id);
   }
 
-  const updated = await request(`/trades/${id}/close`, {
-    method: 'PATCH',
-    body: JSON.stringify(payload),
-  });
-  if (updated && typeof updated === 'object') {
-    upsertLocalTrade({ ...updated, id: updated.id || id, status: 'closed' });
+  try {
+    const updated = await request(`/trades/${id}/close`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+    if (updated && typeof updated === 'object') {
+      upsertLocalTrade({ ...updated, id: updated.id || id, status: 'closed' });
+    }
+    return updated;
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      removeLocalTrade(id);
+      return null;
+    }
+    throw error;
   }
-  return updated;
 }
 
 export async function deleteTrade(id) {
@@ -788,11 +823,19 @@ export async function deleteTrade(id) {
     return { deleted: true };
   }
 
-  const deleted = await request(`/trades/${id}`, {
-    method: 'DELETE',
-  });
-  removeLocalTrade(id);
-  return deleted ?? { deleted: true };
+  try {
+    const deleted = await request(`/trades/${id}`, {
+      method: 'DELETE',
+    });
+    removeLocalTrade(id);
+    return deleted ?? { deleted: true };
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      removeLocalTrade(id);
+      return { deleted: true };
+    }
+    throw error;
+  }
 }
 
 export async function fetchLatestNews() {
@@ -833,11 +876,19 @@ export async function duplicateTrade(id) {
     return clone;
   }
 
-  const duplicated = await request(`/trades/${id}/duplicate`, {
-    method: 'POST',
-  });
-  if (duplicated && typeof duplicated === 'object') {
-    upsertLocalTrade(duplicated);
+  try {
+    const duplicated = await request(`/trades/${id}/duplicate`, {
+      method: 'POST',
+    });
+    if (duplicated && typeof duplicated === 'object') {
+      upsertLocalTrade(duplicated);
+    }
+    return duplicated;
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      removeLocalTrade(id);
+      return null;
+    }
+    throw error;
   }
-  return duplicated;
 }

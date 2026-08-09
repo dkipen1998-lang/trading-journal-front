@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useDeferredValue } from "react";
-import { loginWithTelegram, fetchTrades, fetchProfiles, createProfile, updateProfile, createTrade, updateTrade, closeTrade, deleteTrade, deleteProfile, duplicateTrade, fetchStockSnapshot, fetchTopBinanceVolumeSymbols, clearToken, getUser, setUser, readLocalTrades, readLocalTradesLastSync, writeLocalTradesLastSync, readLocalProfiles, persistLocalTrades, persistLocalProfiles } from "./api";
+import { loginWithTelegram, fetchTrades, fetchProfiles, createProfile, updateProfile, createTrade, updateTrade, closeTrade, deleteTrade, deleteProfile, duplicateTrade, fetchStockSnapshot, fetchTopBinanceVolumeSymbols, clearToken, getUser, setUser, readLocalTrades, readLocalTradesLastSync, writeLocalTradesLastSync, readLocalProfiles, persistLocalTrades, persistLocalProfiles, removeLocalTrade } from "./api";
 import {
   Plus, Search, SlidersHorizontal, Settings, X, Edit2, Trash2, Copy, Camera,
   ChevronRight, Home, BookOpen, BarChart2, Download, Eye, MessageSquare,
@@ -1671,16 +1671,41 @@ export default function TradingJournalApp() {
       setProfiles(localProfiles);
     }
 
+    const syncCutoffDate = new Date('2026-08-08T00:00:00Z');
+    const oldLocalTrades = localTrades.filter((trade) => {
+      if (!trade || !trade.createdAt) return false;
+      const createdAt = new Date(trade.createdAt);
+      return Number.isFinite(createdAt.getTime()) && createdAt < syncCutoffDate;
+    });
+
+    const remoteTradesResult = await fetchTrades(activeProfileId, tradeFetchOptions).catch(() => null);
+    const normalizedRemoteTrades = Array.isArray(remoteTradesResult) ? remoteTradesResult : [];
+    const remoteTradeIds = new Set(normalizedRemoteTrades.map((trade) => trade?.id));
+
+    for (const localTrade of oldLocalTrades) {
+      if (!localTrade.id || remoteTradeIds.has(localTrade.id)) continue;
+      const { id: localId, createdAt, updatedAt, ...payload } = localTrade;
+      try {
+        const created = await createTrade(payload);
+        if (created && created.id) {
+          removeLocalTrade(localId);
+          persistLocalTrades([...(readLocalTrades().filter((item) => item.id !== localId)), created]);
+        }
+      } catch {
+        // ignore individual old-trade sync failures
+      }
+    }
+
     try {
-      const [remoteTradesResult, remoteProfilesResult] = await Promise.allSettled([
-        fetchTrades(activeProfileId, tradeFetchOptions),
+      const [remoteTradesResultSettled, remoteProfilesResult] = await Promise.allSettled([
+        Promise.resolve(remoteTradesResult),
         fetchProfiles(),
       ]);
-      const normalizedRemoteTrades = remoteTradesResult.status === "fulfilled" && Array.isArray(remoteTradesResult.value) ? remoteTradesResult.value : [];
+      const finalRemoteTrades = remoteTradesResultSettled.status === "fulfilled" && Array.isArray(remoteTradesResultSettled.value) ? remoteTradesResultSettled.value : [];
       const normalizedRemoteProfiles = remoteProfilesResult.status === "fulfilled" && Array.isArray(remoteProfilesResult.value) ? remoteProfilesResult.value : [];
 
       const mergedProfiles = mergeProfilesByIdentity(localProfiles, normalizedRemoteProfiles);
-      const mergedTrades = mergeTradesByIdentity(localTrades, normalizedRemoteTrades);
+      const mergedTrades = mergeTradesByIdentity(readLocalTrades(), finalRemoteTrades);
 
       if (mergedTrades.length > 0) {
         setTrades(mergedTrades);
