@@ -1604,7 +1604,7 @@ export default function TradingJournalApp() {
       try {
         const initData = getTelegramInitData();
         const telegramApp = typeof window !== "undefined" ? window.Telegram?.WebApp : null;
-        const hasStoredToken = Boolean(typeof window !== "undefined" ? window.localStorage.getItem("tj_token") : "");
+        let hasStoredToken = Boolean(typeof window !== "undefined" ? window.localStorage.getItem("tj_token") : "");
 
         if (typeof window !== "undefined") {
           console.info('[auth] initData load', { initData, hasStoredToken, telegramReady: Boolean(telegramApp) });
@@ -1612,8 +1612,8 @@ export default function TradingJournalApp() {
 
         if (initData) {
           const result = await loginWithTelegram(initData);
-          const hasStoredSession = Boolean(typeof window !== "undefined" && window.localStorage.getItem("tj_token"));
-          if (result?.token || hasStoredSession) {
+          hasStoredToken = Boolean(typeof window !== "undefined" && window.localStorage.getItem("tj_token"));
+          if (result?.token || hasStoredToken) {
             setIsAuthenticated(true);
           }
           if (result?.user) {
