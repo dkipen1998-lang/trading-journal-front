@@ -309,14 +309,14 @@ async function requestFinnhub(path) {
   }
 }
 
-export async function fetchChatReply(message) {
+export async function fetchChatReply(message, provider) {
   if (!message || typeof message !== 'string') {
     throw new Error('Message is required');
   }
 
   return request('/ai/chat', {
     method: 'POST',
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, provider }),
   });
 }
 

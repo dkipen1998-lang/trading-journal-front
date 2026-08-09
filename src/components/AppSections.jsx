@@ -530,7 +530,7 @@ export function ChatScreen({ t }) {
     setInput("");
 
     try {
-      const result = await fetchChatReply(trimmed);
+      const result = await fetchChatReply(trimmed, 'gemini');
       const reply = result?.text || "No response from AI.";
       setMessages((prev) => [...prev, { role: 'assistant', text: reply }]);
     } catch (err) {
