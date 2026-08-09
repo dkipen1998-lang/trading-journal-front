@@ -961,28 +961,82 @@ const formatDateTime = (date, time) => {
   if (!formattedDate) return "—";
   return time ? `${formattedDate} ${time}` : formattedDate;
 };
+const toPlainString = (value) => {
+  const raw = value == null ? "" : String(value).trim();
+  if (!raw) return "";
+
+  if (/^[+-]?\d+(?:\.\d+)?$/.test(raw)) {
+    return raw;
+  }
+
+  const normalized = raw.replace(/\s+/g, "");
+  const parts = normalized.split(/[eE]/);
+  if (parts.length !== 2) {
+    return raw;
+  }
+
+  const mantissa = parts[0];
+  const exponent = Number(parts[1]);
+  if (!Number.isFinite(exponent)) return raw;
+
+  const sign = mantissa.startsWith("-") ? "-" : mantissa.startsWith("+") ? "+" : "";
+  const absMantissa = mantissa.replace(/^[+-]/, "");
+  const [intPart, fracPart = ""] = absMantissa.split(".");
+  const digits = intPart + fracPart;
+  const currentExp = fracPart.length * -1;
+  const targetExp = currentExp + exponent;
+
+  if (targetExp >= 0) {
+    return `${sign}${digits}${"0".repeat(targetExp)}`;
+  }
+
+  const zeros = "0".repeat(Math.abs(targetExp) - intPart.length);
+  return `${sign}0.${zeros}${digits}`;
+};
+
+const formatPriceFromApi = (value) => {
+  if (value == null) return null;
+  const raw = String(value).trim();
+  if (raw === "" || raw === "NaN" || raw === "null" || raw === "undefined") return null;
+
+  const plain = toPlainString(raw);
+  if (!plain || Number.isNaN(Number(plain))) return null;
+
+  const [integer, fraction = ""] = plain.split(".");
+  if (integer === "0" && fraction) {
+    const leadingZeros = (fraction.match(/^0*/) || [""])[0].length;
+    if (leadingZeros >= 4 && leadingZeros < fraction.length) {
+      const significant = fraction.slice(leadingZeros);
+      return `0,0{${leadingZeros}}${significant}`;
+    }
+  }
+
+  return plain;
+};
+
 const formatStockPrice = (value, currency = "USD") => {
-  if (value == null || Number.isNaN(Number(value))) return "—";
+  const formattedValue = formatPriceFromApi(value);
+  if (!formattedValue) return "—";
+
+  const numericValue = Number(String(value).trim());
   const normalizedCurrency = typeof currency === "string" ? currency.trim().toUpperCase() : "";
-  const numericValue = Number(value);
 
   if (!/^[A-Z]{3}$/.test(normalizedCurrency)) {
-    return new Intl.NumberFormat("en-US", {
-      maximumFractionDigits: 2,
-    }).format(numericValue);
+    return formattedValue;
+  }
+
+  if (formattedValue.startsWith("0,0{")) {
+    return `${normalizedCurrency === "USD" ? "$" : ""}${formattedValue}`;
   }
 
   try {
-    const formatter = new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: normalizedCurrency,
-      maximumFractionDigits: 2,
-    });
-    return formatter.format(numericValue);
+    const usesCurrency = normalizedCurrency === "USD";
+    if (usesCurrency) {
+      return `${usesCurrency ? "$" : ""}${formattedValue}`;
+    }
+    return formattedValue;
   } catch {
-    return new Intl.NumberFormat("en-US", {
-      maximumFractionDigits: 2,
-    }).format(numericValue);
+    return formattedValue;
   }
 };
 const normalizeTicker = (value) => (value || "").trim().toUpperCase();
