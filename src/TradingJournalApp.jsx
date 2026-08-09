@@ -1611,7 +1611,7 @@ export default function TradingJournalApp() {
         if (initData) {
           const result = await loginWithTelegram(initData);
           const hasStoredSession = Boolean(typeof window !== "undefined" && window.localStorage.getItem("tj_token"));
-          if (result?.token || hasStoredSession || result?.user) {
+          if (result?.token || hasStoredSession) {
             setIsAuthenticated(true);
           }
           if (result?.user) {
@@ -1620,8 +1620,10 @@ export default function TradingJournalApp() {
         } else {
           const storedUser = getUser();
           if (storedUser) {
-            setIsAuthenticated(true);
             setUser(storedUser);
+            if (hasStoredToken) {
+              setIsAuthenticated(true);
+            }
           }
         }
 
