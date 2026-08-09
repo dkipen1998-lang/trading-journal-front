@@ -1597,6 +1597,53 @@ export default function TradingJournalApp() {
     setProfileMenuOpen(false);
   };
 
+  const syncRemoteData = async () => {
+    if (typeof window === "undefined") return;
+    const token = window.localStorage.getItem("tj_token");
+    if (!token) return;
+
+    const localTrades = readLocalTrades();
+    const localProfiles = readLocalProfiles();
+    const lastSync = readLocalTradesLastSync();
+    const tradeFetchOptions = {};
+    if (localTrades.length > 0 && lastSync) {
+      tradeFetchOptions.updatedSince = lastSync;
+    }
+
+    try {
+      const [remoteTradesResponse, remoteProfilesResponse] = await Promise.all([
+        fetchTrades(activeProfileId, tradeFetchOptions),
+        fetchProfiles(),
+      ]);
+      const normalizedRemoteTrades = Array.isArray(remoteTradesResponse) ? remoteTradesResponse : [];
+      const normalizedRemoteProfiles = Array.isArray(remoteProfilesResponse) ? remoteProfilesResponse : [];
+
+      const mergedProfiles = mergeProfilesByIdentity(localProfiles, normalizedRemoteProfiles);
+      const mergedTrades = mergeTradesByIdentity(localTrades, normalizedRemoteTrades);
+
+      if (mergedTrades.length > 0) {
+        setTrades(mergedTrades);
+      } else if (localTrades.length > 0) {
+        setTrades(localTrades);
+      }
+
+      if (mergedProfiles.length > 0) {
+        setProfiles(mergedProfiles);
+      } else if (localProfiles.length > 0) {
+        setProfiles(localProfiles);
+      }
+
+      writeLocalTradesLastSync(new Date().toISOString());
+    } catch {
+      // keep current local state on failure
+    }
+  };
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    syncRemoteData();
+  }, [isAuthenticated, activeProfileId]);
+
   useEffect(() => {
     clearLegacyWatchlistStorage();
 
