@@ -1414,6 +1414,8 @@ export default function TradingJournalApp() {
   const [trades, setTrades] = useState(() => {
     if (typeof window === "undefined") return seedTrades();
     try {
+      const token = window.localStorage.getItem("tj_token");
+      if (token) return [];
       const saved = readLocalTrades();
       return saved.length ? saved : seedTrades();
     } catch {
@@ -1670,10 +1672,13 @@ export default function TradingJournalApp() {
         const storedTrades = typeof window !== "undefined" ? window.localStorage.getItem("tj-trades") : null;
         const storedTags = typeof window !== "undefined" ? window.localStorage.getItem("tj-tags") : null;
         const storedSetups = typeof window !== "undefined" ? window.localStorage.getItem("tj-setups") : null;
+        const hasStoredToken = typeof window !== "undefined" && Boolean(window.localStorage.getItem("tj_token"));
         const storedWatchlist = loadWatchlistForProfile(activeProfileId);
 
         if (storedTrades) {
           try { setTrades(JSON.parse(storedTrades)); } catch { setTrades(seedTrades()); }
+        } else if (hasStoredToken) {
+          setTrades([]);
         } else {
           setTrades(seedTrades());
         }
