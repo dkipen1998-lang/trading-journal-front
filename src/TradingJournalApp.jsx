@@ -1610,13 +1610,20 @@ export default function TradingJournalApp() {
       tradeFetchOptions.updatedSince = lastSync;
     }
 
+    if (localTrades.length > 0) {
+      setTrades(localTrades);
+    }
+    if (localProfiles.length > 0) {
+      setProfiles(localProfiles);
+    }
+
     try {
-      const [remoteTradesResponse, remoteProfilesResponse] = await Promise.all([
+      const [remoteTradesResult, remoteProfilesResult] = await Promise.allSettled([
         fetchTrades(activeProfileId, tradeFetchOptions),
         fetchProfiles(),
       ]);
-      const normalizedRemoteTrades = Array.isArray(remoteTradesResponse) ? remoteTradesResponse : [];
-      const normalizedRemoteProfiles = Array.isArray(remoteProfilesResponse) ? remoteProfilesResponse : [];
+      const normalizedRemoteTrades = remoteTradesResult.status === "fulfilled" && Array.isArray(remoteTradesResult.value) ? remoteTradesResult.value : [];
+      const normalizedRemoteProfiles = remoteProfilesResult.status === "fulfilled" && Array.isArray(remoteProfilesResult.value) ? remoteProfilesResult.value : [];
 
       const mergedProfiles = mergeProfilesByIdentity(localProfiles, normalizedRemoteProfiles);
       const mergedTrades = mergeTradesByIdentity(localTrades, normalizedRemoteTrades);
@@ -1678,33 +1685,7 @@ export default function TradingJournalApp() {
 
         const hasStoredLocalData = Boolean(typeof window !== "undefined" ? (readLocalTrades().length || readLocalProfiles().length) : 0);
         if (typeof window !== "undefined" && (hasStoredToken || hasStoredLocalData)) {
-          const localTrades = readLocalTrades();
-          const localProfiles = readLocalProfiles();
-          const lastSync = readLocalTradesLastSync();
-
-          const [remoteTradesResponse, remoteProfilesResponse] = await Promise.all([
-            fetchTrades(activeProfileId, { updatedSince: lastSync }),
-            fetchProfiles(),
-          ]);
-          const normalizedRemoteTrades = Array.isArray(remoteTradesResponse) ? remoteTradesResponse : [];
-          const normalizedRemoteProfiles = Array.isArray(remoteProfilesResponse) ? remoteProfilesResponse : [];
-
-          const mergedProfiles = mergeProfilesByIdentity(localProfiles, normalizedRemoteProfiles);
-          const mergedTrades = mergeTradesByIdentity(localTrades, normalizedRemoteTrades);
-
-          if (mergedTrades.length > 0) {
-            setTrades(mergedTrades);
-          } else if (localTrades.length > 0) {
-            setTrades(localTrades);
-          }
-
-          if (mergedProfiles.length > 0) {
-            setProfiles(mergedProfiles);
-          } else if (localProfiles.length > 0) {
-            setProfiles(localProfiles);
-          }
-
-          writeLocalTradesLastSync(new Date().toISOString());
+          await syncRemoteData();
         }
 
         if (telegramApp) {

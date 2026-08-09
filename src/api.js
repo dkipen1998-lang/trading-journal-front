@@ -239,6 +239,8 @@ function getFallbackUser() {
   return null;
 }
 
+const DEFAULT_REQUEST_TIMEOUT_MS = 8000;
+
 async function request(path, options = {}) {
   const token = getToken();
   const isAuthLoginRequest = path === '/auth/telegram' || path === '/auth/login';
@@ -266,12 +268,19 @@ async function request(path, options = {}) {
     console.info('[auth] sending request', { path, url, body: options.body });
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timeoutId = setTimeout(() => {
+    controller?.abort();
+  }, DEFAULT_REQUEST_TIMEOUT_MS);
 
-  const text = await response.text();
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+      signal: controller?.signal,
+    });
+
+    const text = await response.text();
   if (typeof window !== 'undefined' && (path === '/auth/telegram' || path === '/auth/login')) {
     console.info('[auth] response', { path, status: response.status, body: text });
   }
@@ -282,18 +291,26 @@ async function request(path, options = {}) {
     data = null;
   }
 
-  if (!response.ok) {
-    if ((response.status === 401 || response.status === 403) && !token) {
-      return null;
+    if (!response.ok) {
+      if ((response.status === 401 || response.status === 403) && !token) {
+        return null;
+      }
+      const errorMessage = data?.message || data?.error || 'Request failed';
+      if (typeof window !== 'undefined' && (path === '/auth/telegram' || path === '/auth/login')) {
+        console.error('[auth] request failed', { path, status: response.status, errorMessage, body: text });
+      }
+      throw new Error(errorMessage);
     }
-    const errorMessage = data?.message || data?.error || 'Request failed';
-    if (typeof window !== 'undefined' && (path === '/auth/telegram' || path === '/auth/login')) {
-      console.error('[auth] request failed', { path, status: response.status, errorMessage, body: text });
-    }
-    throw new Error(errorMessage);
-  }
 
-  return data;
+    return data;
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error('Request timed out');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 async function requestFinnhub(path) {
