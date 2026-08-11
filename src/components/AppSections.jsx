@@ -710,11 +710,10 @@ function MiniPriceChart({ row }) {
       }
 
       let points = null;
-      const useBinance = row?.instrumentType === "crypto";
-      const primarySource = useBinance ? "binance" : "finnhub";
 
       try {
-        const candles = await fetchHistoricalCandles(symbol, timeframe, 80, { source: primarySource });
+        // fetchHistoricalCandles now handles both Finnhub and Binance with fallbacks automatically
+        const candles = await fetchHistoricalCandles(symbol, timeframe, 80);
         if (Array.isArray(candles) && candles.length > 0) {
           points = candles.map((item) => ({
             time: typeof item.time === "string" ? item.time : Math.floor(Number(item.time) / 1000),
@@ -725,28 +724,11 @@ function MiniPriceChart({ row }) {
             volume: Number(item.volume),
           }));
         }
-      } catch {
-        points = null;
+      } catch (error) {
+        // Silently fail - will fall back to synthetic data below
       }
 
-      if ((!points || !points.length) && !useBinance) {
-        try {
-          const fallbackCandles = await fetchHistoricalCandles(symbol, timeframe, 80, { source: "finnhub" });
-          if (Array.isArray(fallbackCandles) && fallbackCandles.length > 0) {
-            points = fallbackCandles.map((item) => ({
-              time: typeof item.time === "string" ? item.time : Math.floor(Number(item.time) / 1000),
-              open: Number(item.open),
-              high: Number(item.high),
-              low: Number(item.low),
-              close: Number(item.close),
-              volume: Number(item.volume),
-            }));
-          }
-        } catch {
-          points = null;
-        }
-      }
-
+      // If no real data, use synthetic
       if (!points || !points.length) {
         points = generateSyntheticPoints(row, timeframe);
       }

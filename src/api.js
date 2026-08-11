@@ -530,7 +530,8 @@ export async function fetchHistoricalCandles(symbol, timeframe = '1h', limit = 8
   if (!normalizedSymbol) return null;
 
   const source = options.source ? String(options.source).toLowerCase() : null;
-  const useBinance = source === 'binance' || isCryptoSymbol(normalizedSymbol);
+  const isCrypto = isCryptoSymbol(normalizedSymbol);
+  const useBinanceFirst = source === 'binance' || isCrypto;
   const now = Math.floor(Date.now() / 1000);
   const lookback = Math.min(Math.max(limit, 20), 500);
   const from = now - lookback * ({
@@ -544,34 +545,67 @@ export async function fetchHistoricalCandles(symbol, timeframe = '1h', limit = 8
     '1M': 2678400,
   }[timeframe] || 3600);
 
-  if (useBinance) {
-    const pair = normalizedSymbol.replace(/USD$/i, 'USDT');
-    const interval = mapTimeframeToBinanceInterval(timeframe);
-    const candles = await requestBinance(`/fapi/v1/klines?symbol=${encodeURIComponent(pair)}&interval=${interval}&limit=${lookback}`, { futures: true });
-    if (Array.isArray(candles) && candles.length > 0) {
-      return candles.map((item) => ({
-        time: Math.floor(Number(item[0]) / 1000),
-        open: item[1],
-        high: item[2],
-        low: item[3],
-        close: item[4],
-        volume: item[5],
-      }));
+  // Try primary source first
+  if (useBinanceFirst) {
+    try {
+      const pair = normalizedSymbol.replace(/USD$/i, 'USDT');
+      const interval = mapTimeframeToBinanceInterval(timeframe);
+      const candles = await requestBinance(`/fapi/v1/klines?symbol=${encodeURIComponent(pair)}&interval=${interval}&limit=${lookback}`, { futures: true });
+      if (Array.isArray(candles) && candles.length > 0) {
+        return candles.map((item) => ({
+          time: Math.floor(Number(item[0]) / 1000),
+          open: item[1],
+          high: item[2],
+          low: item[3],
+          close: item[4],
+          volume: item[5],
+        }));
+      }
+    } catch (error) {
+      if (typeof window !== 'undefined') {
+        console.warn(`[candles] Binance failed for ${normalizedSymbol} ${timeframe}:`, error?.message);
+      }
     }
-  }
+  } else {
+    // Try Finnhub for stocks
+    try {
+      const resolution = mapTimeframeToFinnhubResolution(timeframe);
+      const candleData = await requestFinnhub(`/candles?symbol=${encodeURIComponent(normalizedSymbol)}&resolution=${resolution}&from=${from}&to=${now}`);
+      if (candleData && candleData.s === 'ok' && Array.isArray(candleData.t)) {
+        return candleData.t.map((timestamp, index) => ({
+          time: Math.floor(Number(timestamp)),
+          open: candleData.o[index],
+          high: candleData.h[index],
+          low: candleData.l[index],
+          close: candleData.c[index],
+          volume: candleData.v[index],
+        }));
+      }
+    } catch (error) {
+      if (typeof window !== 'undefined') {
+        console.warn(`[candles] Finnhub failed for ${normalizedSymbol} ${timeframe}:`, error?.message);
+      }
+    }
 
-  if (!useBinance) {
-    const resolution = mapTimeframeToFinnhubResolution(timeframe);
-    const candleData = await requestFinnhub(`/candles?symbol=${encodeURIComponent(normalizedSymbol)}&resolution=${resolution}&from=${from}&to=${now}`);
-    if (candleData && candleData.s === 'ok' && Array.isArray(candleData.t)) {
-      return candleData.t.map((timestamp, index) => ({
-        time: Math.floor(Number(timestamp)),
-        open: candleData.o[index],
-        high: candleData.h[index],
-        low: candleData.l[index],
-        close: candleData.c[index],
-        volume: candleData.v[index],
-      }));
+    // For stocks, try Binance as fallback (useful for stocks that trade on Binance like stocks or ETFs that might be available via Binance)
+    try {
+      const pair = normalizedSymbol.replace(/USD$/i, 'USDT');
+      const interval = mapTimeframeToBinanceInterval(timeframe);
+      const candles = await requestBinance(`/fapi/v1/klines?symbol=${encodeURIComponent(pair)}&interval=${interval}&limit=${lookback}`, { futures: true });
+      if (Array.isArray(candles) && candles.length > 0) {
+        return candles.map((item) => ({
+          time: Math.floor(Number(item[0]) / 1000),
+          open: item[1],
+          high: item[2],
+          low: item[3],
+          close: item[4],
+          volume: item[5],
+        }));
+      }
+    } catch (error) {
+      if (typeof window !== 'undefined') {
+        console.warn(`[candles] Binance fallback failed for ${normalizedSymbol} ${timeframe}:`, error?.message);
+      }
     }
   }
 
