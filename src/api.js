@@ -545,21 +545,47 @@ export async function fetchHistoricalCandles(symbol, timeframe = '1h', limit = 8
     '1M': 2678400,
   }[timeframe] || 3600);
 
+  // Validate and normalize candles data
+  const validateCandles = (candles) => {
+    if (!Array.isArray(candles) || candles.length === 0) return null;
+    
+    try {
+      return candles.every(c => 
+        typeof c.time === 'number' &&
+        typeof c.open === 'number' &&
+        typeof c.high === 'number' &&
+        typeof c.low === 'number' &&
+        typeof c.close === 'number' &&
+        Number.isFinite(c.time) &&
+        Number.isFinite(c.open) &&
+        Number.isFinite(c.high) &&
+        Number.isFinite(c.low) &&
+        Number.isFinite(c.close)
+      ) ? candles : null;
+    } catch {
+      return null;
+    }
+  };
+
   // Try primary source first
   if (useBinanceFirst) {
     try {
       const pair = normalizedSymbol.replace(/USD$/i, 'USDT');
       const interval = mapTimeframeToBinanceInterval(timeframe);
       const candles = await requestBinance(`/fapi/v1/klines?symbol=${encodeURIComponent(pair)}&interval=${interval}&limit=${lookback}`, { futures: true });
+      
       if (Array.isArray(candles) && candles.length > 0) {
-        return candles.map((item) => ({
+        const normalized = candles.map((item) => ({
           time: Math.floor(Number(item[0]) / 1000),
-          open: item[1],
-          high: item[2],
-          low: item[3],
-          close: item[4],
-          volume: item[5],
+          open: Number(item[1]),
+          high: Number(item[2]),
+          low: Number(item[3]),
+          close: Number(item[4]),
+          volume: Number(item[7]),
         }));
+        
+        const validated = validateCandles(normalized);
+        if (validated) return validated;
       }
     } catch (error) {
       if (typeof window !== 'undefined') {
@@ -571,15 +597,19 @@ export async function fetchHistoricalCandles(symbol, timeframe = '1h', limit = 8
     try {
       const resolution = mapTimeframeToFinnhubResolution(timeframe);
       const candleData = await requestFinnhub(`/candles?symbol=${encodeURIComponent(normalizedSymbol)}&resolution=${resolution}&from=${from}&to=${now}`);
-      if (candleData && candleData.s === 'ok' && Array.isArray(candleData.t)) {
-        return candleData.t.map((timestamp, index) => ({
+      
+      if (candleData && candleData.s === 'ok' && Array.isArray(candleData.t) && candleData.t.length > 0) {
+        const normalized = candleData.t.map((timestamp, index) => ({
           time: Math.floor(Number(timestamp)),
-          open: candleData.o[index],
-          high: candleData.h[index],
-          low: candleData.l[index],
-          close: candleData.c[index],
-          volume: candleData.v[index],
+          open: Number(candleData.o[index]),
+          high: Number(candleData.h[index]),
+          low: Number(candleData.l[index]),
+          close: Number(candleData.c[index]),
+          volume: Number(candleData.v[index] || 0),
         }));
+        
+        const validated = validateCandles(normalized);
+        if (validated) return validated;
       }
     } catch (error) {
       if (typeof window !== 'undefined') {
@@ -587,20 +617,24 @@ export async function fetchHistoricalCandles(symbol, timeframe = '1h', limit = 8
       }
     }
 
-    // For stocks, try Binance as fallback (useful for stocks that trade on Binance like stocks or ETFs that might be available via Binance)
+    // For stocks, try Binance as fallback
     try {
       const pair = normalizedSymbol.replace(/USD$/i, 'USDT');
       const interval = mapTimeframeToBinanceInterval(timeframe);
       const candles = await requestBinance(`/fapi/v1/klines?symbol=${encodeURIComponent(pair)}&interval=${interval}&limit=${lookback}`, { futures: true });
+      
       if (Array.isArray(candles) && candles.length > 0) {
-        return candles.map((item) => ({
+        const normalized = candles.map((item) => ({
           time: Math.floor(Number(item[0]) / 1000),
-          open: item[1],
-          high: item[2],
-          low: item[3],
-          close: item[4],
-          volume: item[5],
+          open: Number(item[1]),
+          high: Number(item[2]),
+          low: Number(item[3]),
+          close: Number(item[4]),
+          volume: Number(item[7]),
         }));
+        
+        const validated = validateCandles(normalized);
+        if (validated) return validated;
       }
     } catch (error) {
       if (typeof window !== 'undefined') {
