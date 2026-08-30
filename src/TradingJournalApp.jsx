@@ -1100,9 +1100,20 @@ const formatStockPrice = (value, currency = "USD") => {
     return formattedValue;
   }
 };
-const normalizeTicker = (value) => (value || "").trim().toUpperCase();
+const TICKER_TOKEN_RE = /^[\p{L}\p{N}.\-]+$/u;
+
+function sanitizeTickerToken(value) {
+  return (value || "").trim().replace(/\s+/g, "").replace(/[^\p{L}\p{N}.\-]/gu, "");
+}
+
+function isValidTickerToken(value) {
+  const normalized = sanitizeTickerToken(value);
+  return Boolean(normalized) && TICKER_TOKEN_RE.test(normalized);
+}
+
+const normalizeTicker = (value) => sanitizeTickerToken(value).toUpperCase();
 function formatTickerSymbol(symbol) {
-  const value = (symbol || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const value = sanitizeTickerToken(symbol).toUpperCase();
   if (!value) return "";
 
   const normalized = value;
@@ -1268,7 +1279,7 @@ const CANONICAL_CRYPTO_SYMBOLS = [
 ];
 
 function canonicalizeTicker(symbol) {
-  const value = (symbol || "").trim().toUpperCase().replace(/\s+/g, "");
+  const value = sanitizeTickerToken(symbol).toUpperCase();
   if (!value) return "";
   const stripped = value.replace(/[.:].*$/, "");
   const isForex = /^(EUR|GBP|JPY|AUD|CAD|CHF|NZD|CNY|SEK|NOK|MXN|ZAR|TRY|INR|KRW)USD$/.test(stripped);
@@ -1616,8 +1627,8 @@ export default function TradingJournalApp() {
 
     const symbols = new Map();
     const addSymbol = (symbol) => {
-      const normalized = (symbol || "").trim().toUpperCase();
-      if (!normalized || !/^[A-Z0-9.\-]+$/.test(normalized)) return;
+      const normalized = normalizeTicker(symbol);
+      if (!normalized || !isValidTickerToken(normalized)) return;
       const canonical = canonicalizeTicker(normalized);
       if (!canonical) return;
       const displaySymbol = formatTickerSymbol(normalized);
@@ -2209,10 +2220,10 @@ export default function TradingJournalApp() {
       return;
     }
 
-    const normalizedQuery = query.toUpperCase();
+    const normalizedQuery = normalizeTicker(query);
     const canonicalQuery = canonicalizeTicker(normalizedQuery);
     const querySymbol = formatTickerSymbol(normalizedQuery);
-    const looksLikeTicker = /^[A-Z0-9.\-]{1,10}$/.test(normalizedQuery);
+    const looksLikeTicker = isValidTickerToken(normalizedQuery) && normalizedQuery.length <= 10;
     if (!looksLikeTicker) return;
     if (lastManualScreenerSymbol.current === canonicalQuery) return;
 
@@ -2275,7 +2286,7 @@ export default function TradingJournalApp() {
 
     watchlist.forEach((item) => {
       const symbol = normalizeTicker(item?.symbol || "");
-      if (!symbol || !/^[A-Z0-9.\-]+$/.test(symbol)) return;
+      if (!symbol || !isValidTickerToken(symbol)) return;
       const hasPrice = item.price != null;
       const hasLogo = Boolean(item.logo);
       const hasExchange = Boolean(item.exchange);
@@ -2286,7 +2297,7 @@ export default function TradingJournalApp() {
 
     trades.forEach((trade) => {
       const symbol = normalizeTicker(trade?.ticker || trade?.symbol || "");
-      if (!symbol || !/^[A-Z0-9.\-]+$/.test(symbol)) return;
+      if (!symbol || !isValidTickerToken(symbol)) return;
       const hasPrice = trade.status === "open" ? trade.currentPrice != null : true;
       const hasLogo = Boolean(trade.logo);
       const hasExchange = Boolean(trade.exchange);
@@ -3676,14 +3687,6 @@ async function exportTrades(trades, type, showToast, t) {
     const winRate = rows.length ? ((wins / rows.length) * 100).toFixed(1) : "0.0";
     const exportDate = new Date().toISOString().slice(0, 10);
 
-    const columns = [
-      { key: "Ticker", width: 60 },
-      { key: "Side", width: 50 },
-      { key: "EntryDate", width: 70 },
-      { key: "PnL", width: 50 },
-      { key: "RMultiple", width: 50 },
-    ];
-
     const tableRows = rows.map((trade) => ({
       Ticker: trade.Ticker || "-",
       Side: trade.Side || "-",
@@ -3691,6 +3694,19 @@ async function exportTrades(trades, type, showToast, t) {
       PnL: trade.PnL == null || trade.PnL === "" ? "-" : trade.PnL,
       RMultiple: trade.RMultiple == null || trade.RMultiple === "" ? "-" : trade.RMultiple,
     }));
+
+    const entryDateWidth = Math.max(
+      70,
+      ...tableRows.map((row) => doc.getTextWidth(String(row.EntryDate || "-")) + 16),
+    );
+
+    const columns = [
+      { key: "Ticker", width: 60 },
+      { key: "Side", width: 50 },
+      { key: "EntryDate", width: entryDateWidth },
+      { key: "PnL", width: 50 },
+      { key: "RMultiple", width: 50 },
+    ];
 
     const headerHeight = 20;
     const rowHeight = 16;
