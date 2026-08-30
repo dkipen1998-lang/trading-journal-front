@@ -2593,7 +2593,7 @@ export default function TradingJournalApp() {
       setIsSavingTrade(false);
     }
   }
-  async function updateTradeById(id, patch) {
+  async function updateTradeById(id, patch, showNotification = true) {
     const trade = trades.find((item) => item.id === id) || {};
     const normalizedPatch = {
       ...patch,
@@ -2610,10 +2610,14 @@ export default function TradingJournalApp() {
       } else {
         setTrades((prev) => prev.map((trade) => (trade.id === id ? { ...trade, ...normalizedPatch } : trade)));
       }
-      showToast(t.tradeUpdated);
+      if (showNotification) {
+        showToast(t.tradeUpdated);
+      }
     } catch (err) {
       setTrades((prev) => prev.map((trade) => (trade.id === id ? { ...trade, ...normalizedPatch } : trade)));
-      showToast(err.message || t.failedUpdateTrade);
+      if (showNotification) {
+        showToast(err.message || t.failedUpdateTrade);
+      }
     }
   }
   // Ensure existing trades have correct instrumentType inferred from ticker + entryPrice.
@@ -2635,7 +2639,8 @@ export default function TradingJournalApp() {
       for (const item of toFix) {
         try {
           // reuse update flow which also updates local state
-          await updateTradeById(item.id, { instrumentType: item.instrumentType });
+          // pass false to showNotification to avoid showing toast on page reload
+          await updateTradeById(item.id, { instrumentType: item.instrumentType }, false);
         } catch (e) {
           // ignore individual failures
         }
@@ -3637,7 +3642,7 @@ async function exportTrades(trades, type, showToast, t) {
     Ticker: trade.ticker, Side: trade.side, Status: trade.status,
     EntryDate: trade.entryDate, EntryTime: trade.entryTime, EntryPrice: trade.entryPrice,
     StopLoss: trade.stopLoss, TakeProfit: trade.takeProfit, PositionSize: trade.positionSize,
-    RiskDollar: trade.riskDollar, RiskPercent: trade.riskPercent, Setup: trade.setup,
+    RiskDollar: trade.riskDollar, RiskPercent: trade.riskPercent,
     Tags: (trade.tags || []).join("|"), ExitDate: trade.exitDate, ExitTime: trade.exitTime,
     ExitPrice: trade.exitPrice, ExitReason: trade.exitReason, PnL: trade.pnl, PnLPercent: trade.pnlPercent,
     RMultiple: trade.rMultiple, Notes: trade.notes, PostComment: trade.postComment,
@@ -3675,7 +3680,6 @@ async function exportTrades(trades, type, showToast, t) {
       { key: "Ticker", width: 60 },
       { key: "Side", width: 50 },
       { key: "EntryDate", width: 70 },
-      { key: "Setup", width: 70 },
       { key: "PnL", width: 50 },
       { key: "RMultiple", width: 50 },
     ];
@@ -3684,7 +3688,6 @@ async function exportTrades(trades, type, showToast, t) {
       Ticker: trade.Ticker || "-",
       Side: trade.Side || "-",
       EntryDate: trade.EntryDate || "-",
-      Setup: trade.Setup || "-",
       PnL: trade.PnL == null || trade.PnL === "" ? "-" : trade.PnL,
       RMultiple: trade.RMultiple == null || trade.RMultiple === "" ? "-" : trade.RMultiple,
     }));
