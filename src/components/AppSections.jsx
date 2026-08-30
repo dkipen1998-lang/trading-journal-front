@@ -1247,12 +1247,46 @@ export function CloseTradeForm({ trade, onClose, onSubmit, t }) {
   );
 }
 
-export function FilterSheet({ filters, setFilters, setups, tags, onClose, t }) {
+export function FilterSheet({ filters, setFilters, setups, tags, onClose, t, onExport }) {
   const [local, setLocal] = useState(filters);
   const labels = t || FALLBACK_LABELS;
+
+  const applyPreset = (preset) => {
+    const now = new Date();
+    const pad = (value) => String(value).padStart(2, "0");
+    const isoDate = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+
+    const dateRangeMap = {
+      all: { dateFrom: "", dateTo: "" },
+      today: { dateFrom: isoDate(now), dateTo: isoDate(now) },
+      last7: {
+        dateFrom: isoDate(new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000)),
+        dateTo: isoDate(now),
+      },
+      last30: {
+        dateFrom: isoDate(new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000)),
+        dateTo: isoDate(now),
+      },
+      month: {
+        dateFrom: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10),
+        dateTo: isoDate(now),
+      },
+    };
+
+    const next = { ...local, ...dateRangeMap[preset] };
+    setLocal(next);
+  };
+
   useEffect(() => { setLocal((prev) => ({ ...prev, tag: prev.tag && tags.includes(prev.tag) ? prev.tag : "all" })); }, [tags]);
   function group(label, key, options) { return <div style={{ marginBottom: 18 }}><div className="tj-label" style={{ marginBottom: 8 }}>{label}</div><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{options.map((option) => <button key={option.value} className={cls("tj-chip", local[key] === option.value && "on")} onClick={() => setLocal((prev) => ({ ...prev, [key]: option.value }))}>{option.label}</button>)}</div></div>; }
   const tagOptions = [{ value: "all", label: labels.all }, ...tags.map((tag) => ({ value: tag, label: tag }))];
+  const datePresetOptions = [
+    { value: "all", label: labels.all },
+    { value: "today", label: labels.today || "Today" },
+    { value: "last7", label: labels.last7Days || "Last 7 days" },
+    { value: "last30", label: labels.last30Days || "Last 30 days" },
+    { value: "month", label: labels.thisMonth || "This month" },
+  ];
   return (
     <div className="tj-sheet-backdrop" onClick={onClose}>
       <div className="tj-sheet tj-scroll-hide" onClick={(event) => event.stopPropagation()}>
@@ -1263,8 +1297,48 @@ export function FilterSheet({ filters, setFilters, setups, tags, onClose, t }) {
           {group(labels.result, "result", [{ value: "all", label: labels.all }, { value: "profit", label: labels.profitable }, { value: "loss", label: labels.losing }])}
           {group(labels.setup, "setup", [{ value: "all", label: labels.all }, ...setups.map((setup) => ({ value: setup, label: setup }))])}
           {group(labels.tag, "tag", tagOptions)}
+
+          <div style={{ marginBottom: 18 }}>
+            <div className="tj-label" style={{ marginBottom: 8 }}>{labels.date || "Date"}</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {datePresetOptions.map((option) => (
+                <button key={option.value} className={cls("tj-chip")} onClick={() => applyPreset(option.value)}>{option.label}</button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 18 }}>
+            <div>
+              <label className="tj-label">{labels.dateFrom || "Date from"}</label>
+              <input
+                type="date"
+                className="tj-input tj-input-compact"
+                value={local.dateFrom || ""}
+                onChange={(event) => setLocal((prev) => ({ ...prev, dateFrom: event.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="tj-label">{labels.dateTo || "Date to"}</label>
+              <input
+                type="date"
+                className="tj-input tj-input-compact"
+                value={local.dateTo || ""}
+                onChange={(event) => setLocal((prev) => ({ ...prev, dateTo: event.target.value }))}
+              />
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 18 }}>
+            <div className="tj-label" style={{ marginBottom: 8 }}>{labels.export || "Export"}</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {['csv', 'xlsx', 'pdf'].map((format) => (
+                <button key={format} className="tj-chip" onClick={() => onExport && onExport(format)}>{format.toUpperCase()}</button>
+              ))}
+            </div>
+          </div>
+
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="tj-btn-ghost" style={{ flex: 1 }} onClick={() => { const cleared = { status: "all", side: "all", result: "all", setup: "all", tag: "all" }; setLocal(cleared); setFilters(cleared); }}>{labels.clearAll}</button>
+            <button className="tj-btn-ghost" style={{ flex: 1 }} onClick={() => { const cleared = { status: "all", side: "all", result: "all", setup: "all", tag: "all", dateFrom: "", dateTo: "" }; setLocal(cleared); setFilters(cleared); }}>{labels.clearAll}</button>
             <button className="tj-btn-primary" style={{ flex: 1 }} onClick={() => { setFilters(local); onClose(); }}>{labels.apply}</button>
           </div>
         </div>

@@ -97,6 +97,22 @@ function mergeProfilesByIdentity(localProfiles, remoteProfiles) {
   return merged;
 }
 
+function remoteTradeListToUnique(items) {
+  if (!Array.isArray(items)) return [];
+  const unique = [];
+  const seen = new Set();
+
+  for (const trade of items) {
+    if (!trade || (!trade.id && !trade.ticker)) continue;
+    const identity = trade.id ? `id:${trade.id}` : `key:${String(trade.ticker || "").trim().toLowerCase()}|${trade.entryDate || ""}|${trade.entryTime || ""}|${trade.entryPrice ?? ""}`;
+    if (seen.has(identity)) continue;
+    seen.add(identity);
+    unique.push(trade);
+  }
+
+  return unique;
+}
+
 function mergeTradesByIdentity(localTrades, remoteTrades) {
   const merged = [];
   const seen = new Set();
@@ -109,9 +125,54 @@ function mergeTradesByIdentity(localTrades, remoteTrades) {
     merged.push(trade);
   };
 
-  normalizeTradeList(remoteTrades).forEach(addTrade);
+  remoteTradeListToUnique(remoteTrades).forEach(addTrade);
   normalizeTradeList(localTrades).forEach(addTrade);
   return merged;
+}
+
+function getTradeSortTimestamp(trade) {
+  if (!trade) return 0;
+  const date = trade.entryDate || trade.exitDate || "";
+  const time = trade.entryTime || trade.exitTime || "00:00";
+  if (!date) return 0;
+  return new Date(`${date}T${time}:00`).getTime();
+}
+
+function sortTradesByDate(items, direction = "desc") {
+  return [...(Array.isArray(items) ? items : [])].sort((a, b) => {
+    const aDate = getTradeSortTimestamp(a);
+    const bDate = getTradeSortTimestamp(b);
+    return direction === "asc" ? aDate - bDate : bDate - aDate;
+  });
+}
+
+function getTradeDateCandidates(trade) {
+  if (!trade) return [];
+  const candidates = [trade.entryDate, trade.exitDate, trade.createdAt, trade.updatedAt].filter(Boolean).map((value) => {
+    if (typeof value === "number") return new Date(value).toISOString().slice(0, 10);
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+      const iso = new Date(trimmed);
+      return Number.isFinite(iso.getTime()) ? iso.toISOString().slice(0, 10) : null;
+    }
+    return null;
+  }).filter(Boolean);
+  return [...new Set(candidates)];
+}
+
+function matchesTradeDateFilter(trade, filters) {
+  const { dateFrom, dateTo } = filters || {};
+  if (!dateFrom && !dateTo) return true;
+
+  const candidates = getTradeDateCandidates(trade);
+  if (!candidates.length) return false;
+
+  return candidates.some((candidate) => {
+    if (dateFrom && candidate < dateFrom) return false;
+    if (dateTo && candidate > dateTo) return false;
+    return true;
+  });
 }
 
 function TelegramIcon() {
@@ -352,7 +413,7 @@ const LANGUAGE_LABELS = {
     failedDuplicateTrade: "Не вдалося продублювати угоду",
     exportCsv: "CSV експортовано",
     exportXlsx: "Excel експортовано",
-    exportPdf: "PDF експорт незабаром — використовуйте CSV/Excel",
+    exportPdf: "PDF експортовано",
     pnlLabel: "P&L",
     tagsLabel: "Теги",
     notesLabel: "Нотатки",
@@ -545,7 +606,7 @@ const LANGUAGE_LABELS = {
     failedDuplicateTrade: "Failed to duplicate trade",
     exportCsv: "CSV exported",
     exportXlsx: "Excel exported",
-    exportPdf: "PDF export coming soon — use CSV/Excel for now",
+    exportPdf: "PDF exported",
     pnlLabel: "P&L",
     tagsLabel: "Tags",
     notesLabel: "Notes",
@@ -1423,9 +1484,20 @@ export default function TradingJournalApp() {
   const [search, setSearch] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
   const [filters, setFilters] = useState(() => {
-    if (typeof window === "undefined") return { status: "all", side: "all", result: "all", setup: "all", tag: "all" };
-    const saved = readUserSettings(getUser()?.id)?.filters;
-    return saved || { status: "all", side: "all", result: "all", setup: "all", tag: "all" };
+    const defaultFilters = { status: "all", side: "all", result: "all", setup: "all", tag: "all", dateFrom: "", dateTo: "" };
+    if (typeof window === "undefined") return defaultFilters;
+    try {
+      const savedUser = readUserSettings(getUser()?.id)?.filters;
+      if (savedUser) return { ...defaultFilters, ...savedUser };
+      const raw = window.localStorage.getItem("tj-filters");
+      if (raw) {
+        const savedLocal = JSON.parse(raw);
+        return { ...defaultFilters, ...savedLocal };
+      }
+    } catch {
+      // ignore malformed stored filters and fall back to defaults
+    }
+    return defaultFilters;
   });
   const [incomePeriod, setIncomePeriod] = useState(() => {
     if (typeof window === "undefined") return "30d";
@@ -1447,7 +1519,9 @@ export default function TradingJournalApp() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     if (typeof window === "undefined") return false;
     try {
-      return Boolean(window.localStorage.getItem("tj_token"));
+      const hasToken = Boolean(window.localStorage.getItem("tj_token"));
+      const hasStoredUser = Boolean(getUser());
+      return hasToken || hasStoredUser;
     } catch {
       return false;
     }
@@ -1468,9 +1542,14 @@ export default function TradingJournalApp() {
   const [trades, setTrades] = useState(() => {
     if (typeof window === "undefined") return seedTrades();
     try {
-      const token = window.localStorage.getItem("tj_token");
-      if (token) return [];
       const saved = readLocalTrades();
+      const hasToken = Boolean(window.localStorage.getItem("tj_token"));
+      if (hasToken && saved.length) {
+        return saved;
+      }
+      if (hasToken && !saved.length) {
+        return [];
+      }
       return saved.length ? saved : seedTrades();
     } catch {
       return seedTrades();
@@ -1591,9 +1670,15 @@ export default function TradingJournalApp() {
   const [profiles, setProfiles] = useState(() => {
     if (typeof window === "undefined") return [];
     try {
+      const saved = readLocalProfiles();
       const hasAuthToken = Boolean(window.localStorage.getItem("tj_token"));
-      if (hasAuthToken) return [];
-      return readLocalProfiles();
+      if (hasAuthToken && saved.length) {
+        return saved;
+      }
+      if (hasAuthToken && !saved.length) {
+        return [];
+      }
+      return saved.length ? saved : [];
     } catch {
       return [];
     }
@@ -1679,8 +1764,35 @@ export default function TradingJournalApp() {
     });
 
     const remoteTradesResult = await fetchTrades(activeProfileId, tradeFetchOptions).catch(() => null);
-    const normalizedRemoteTrades = Array.isArray(remoteTradesResult) ? remoteTradesResult : [];
+    const normalizedRemoteTrades = Array.isArray(remoteTradesResult) ? remoteTradeListToUnique(remoteTradesResult) : [];
+    const remoteTradeMap = new Map(normalizedRemoteTrades.filter(Boolean).map((trade) => [trade.id, trade]));
     const remoteTradeIds = new Set(normalizedRemoteTrades.map((trade) => trade?.id));
+
+    const unsyncedLocalTrades = localTrades.filter((localTrade) => {
+      if (!localTrade || !localTrade.id) return true;
+      const remoteTrade = remoteTradeMap.get(localTrade.id);
+      if (!remoteTrade) return true;
+      return JSON.stringify(remoteTrade) !== JSON.stringify(localTrade);
+    });
+
+    for (const localTrade of unsyncedLocalTrades) {
+      if (!localTrade || !localTrade.id) continue;
+      const remoteMatch = remoteTradeMap.get(localTrade.id);
+      const { id: localId, createdAt, updatedAt, ...payload } = localTrade;
+      try {
+        if (remoteMatch) {
+          await updateTrade(localId, payload);
+        } else {
+          const created = await createTrade(payload);
+          if (created && created.id) {
+            removeLocalTrade(localId);
+            persistLocalTrades([...(readLocalTrades().filter((item) => item.id !== localId)), created]);
+          }
+        }
+      } catch {
+        // ignore individual sync failures and keep local data intact
+      }
+    }
 
     for (const localTrade of oldLocalTrades) {
       if (!localTrade.id || remoteTradeIds.has(localTrade.id)) continue;
@@ -1701,8 +1813,24 @@ export default function TradingJournalApp() {
         Promise.resolve(remoteTradesResult),
         fetchProfiles(),
       ]);
-      const finalRemoteTrades = remoteTradesResultSettled.status === "fulfilled" && Array.isArray(remoteTradesResultSettled.value) ? remoteTradesResultSettled.value : [];
+      const finalRemoteTrades = remoteTradesResultSettled.status === "fulfilled" && Array.isArray(remoteTradesResultSettled.value) ? remoteTradeListToUnique(remoteTradesResultSettled.value) : [];
       const normalizedRemoteProfiles = remoteProfilesResult.status === "fulfilled" && Array.isArray(remoteProfilesResult.value) ? remoteProfilesResult.value : [];
+      const remoteProfileMap = new Map(normalizedRemoteProfiles.filter(Boolean).map((profile) => [profile.id, profile]));
+
+      for (const localProfile of localProfiles) {
+        if (!localProfile || !localProfile.id) continue;
+        if (remoteProfileMap.has(localProfile.id)) continue;
+        try {
+          await createProfile({
+            ...localProfile,
+            id: undefined,
+            createdAt: localProfile.createdAt || new Date().toISOString(),
+            updatedAt: localProfile.updatedAt || new Date().toISOString(),
+          });
+        } catch {
+          // ignore individual profile sync failures
+        }
+      }
 
       const mergedProfiles = mergeProfilesByIdentity(localProfiles, normalizedRemoteProfiles);
       const mergedTrades = mergeTradesByIdentity(readLocalTrades(), finalRemoteTrades);
@@ -1728,6 +1856,35 @@ export default function TradingJournalApp() {
   useEffect(() => {
     if (!isAuthenticated) return;
     syncRemoteData();
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        syncRemoteData();
+      }
+    };
+
+    const intervalId = typeof window !== "undefined" ? window.setInterval(() => {
+      syncRemoteData();
+    }, 60000) : null;
+
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+    }
+    if (typeof window !== "undefined") {
+      window.addEventListener("focus", handleVisibilityChange);
+    }
+
+    return () => {
+      if (intervalId) {
+        window.clearInterval(intervalId);
+      }
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      }
+      if (typeof window !== "undefined") {
+        window.removeEventListener("focus", handleVisibilityChange);
+      }
+    };
   }, [isAuthenticated, activeProfileId]);
 
   useEffect(() => {
@@ -1737,10 +1894,19 @@ export default function TradingJournalApp() {
       try {
         const initData = getTelegramInitData();
         const telegramApp = typeof window !== "undefined" ? window.Telegram?.WebApp : null;
+        const storedSessionUser = getUser();
         let hasStoredToken = Boolean(typeof window !== "undefined" ? window.localStorage.getItem("tj_token") : "");
 
         if (typeof window !== "undefined") {
-          console.info('[auth] initData load', { initData, hasStoredToken, telegramReady: Boolean(telegramApp) });
+          console.info('[auth] initData load', { initData, hasStoredToken, telegramReady: Boolean(telegramApp), storedUser: Boolean(storedSessionUser) });
+        }
+
+        if (storedSessionUser) {
+          setUser(storedSessionUser);
+        }
+
+        if (hasStoredToken) {
+          setIsAuthenticated(true);
         }
 
         if (initData) {
@@ -1752,14 +1918,8 @@ export default function TradingJournalApp() {
           if (result?.user) {
             setUser(result.user);
           }
-        } else {
-          const storedUser = getUser();
-          if (storedUser) {
-            setUser(storedUser);
-            if (hasStoredToken) {
-              setIsAuthenticated(true);
-            }
-          }
+        } else if (storedSessionUser && hasStoredToken) {
+          setIsAuthenticated(true);
         }
 
         const hasStoredLocalData = Boolean(typeof window !== "undefined" ? (readLocalTrades().length || readLocalProfiles().length) : 0);
@@ -2261,9 +2421,7 @@ export default function TradingJournalApp() {
 
   useEffect(() => {
     const currentUserId = user?.id || getUser()?.id || null;
-    if (!currentUserId) return;
-
-    writeUserSettings(currentUserId, {
+    const settings = {
       language,
       defaultRiskPerTrade,
       incomePeriod,
@@ -2271,7 +2429,15 @@ export default function TradingJournalApp() {
       tab,
       activeProfileId,
       standardProfile,
-    });
+    };
+
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem("tj-filters", JSON.stringify(filters));
+      } catch {}
+    }
+
+    writeUserSettings(currentUserId, settings);
   }, [user?.id, language, defaultRiskPerTrade, incomePeriod, filters, tab, activeProfileId, standardProfile]);
 
   // Keep global dark background to match app
@@ -2572,7 +2738,10 @@ export default function TradingJournalApp() {
     if (filters.result !== "all") out = out.filter((trade) => trade.status === "closed" && (filters.result === "profit" ? trade.pnl > 0 : trade.pnl <= 0));
     if (filters.setup !== "all") out = out.filter((trade) => trade.setup === filters.setup);
     if (filters.tag !== "all") out = out.filter((trade) => (trade.tags || []).includes(filters.tag));
-    return out;
+    if (filters.dateFrom || filters.dateTo) {
+      out = out.filter((trade) => matchesTradeDateFilter(trade, filters));
+    }
+    return sortTradesByDate(out, "desc");
   }, [trades, activeProfileId, deferredSearch, filters]);
 
   const activeProfile = useMemo(() => profiles.find((item) => item.id === activeProfileId), [profiles, activeProfileId]);
@@ -3157,6 +3326,7 @@ export default function TradingJournalApp() {
           setups={setups}
           tags={tags}
           onClose={() => setFilterOpen(false)}
+          onExport={(type) => exportTrades(sortTradesByDate(filtered, "desc"), type, showToast, t)}
           t={t}
         />
       )}
@@ -3488,6 +3658,106 @@ async function exportTrades(trades, type, showToast, t) {
     downloadBlob(out, "trading-journal.xlsx", "application/octet-stream", true);
     showToast(t.exportXlsx);
   } else {
+    const { jsPDF } = await import("jspdf");
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
+    const margin = 30;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const totalPnL = rows.reduce((sum, trade) => sum + (Number(trade.PnL) || 0), 0);
+    const wins = rows.filter((trade) => Number(trade.PnL) > 0).length;
+    const losses = rows.filter((trade) => Number(trade.PnL) < 0).length;
+    const openTrades = rows.filter((trade) => String(trade.Status || "").toLowerCase() === "open").length;
+    const closedTrades = rows.filter((trade) => String(trade.Status || "").toLowerCase() === "closed").length;
+    const winRate = rows.length ? ((wins / rows.length) * 100).toFixed(1) : "0.0";
+    const exportDate = new Date().toISOString().slice(0, 10);
+
+    const columns = [
+      { key: "Ticker", width: 60 },
+      { key: "Side", width: 50 },
+      { key: "EntryDate", width: 70 },
+      { key: "Setup", width: 70 },
+      { key: "PnL", width: 50 },
+      { key: "RMultiple", width: 50 },
+    ];
+
+    const tableRows = rows.map((trade) => ({
+      Ticker: trade.Ticker || "-",
+      Side: trade.Side || "-",
+      EntryDate: trade.EntryDate || "-",
+      Setup: trade.Setup || "-",
+      PnL: trade.PnL == null || trade.PnL === "" ? "-" : trade.PnL,
+      RMultiple: trade.RMultiple == null || trade.RMultiple === "" ? "-" : trade.RMultiple,
+    }));
+
+    const headerHeight = 20;
+    const rowHeight = 16;
+    let y = 60;
+
+    doc.setFillColor(20, 25, 30);
+    doc.rect(0, 0, pageWidth, 36, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text("Trading Journal Report", margin, 23);
+    doc.setFontSize(9);
+    doc.text(`Export date: ${exportDate}`, pageWidth - 110, 23);
+    doc.setTextColor(0, 0, 0);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("Summary", margin, 52);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+
+    const summary = [
+      `Records: ${rows.length}`,
+      `Total P&L: ${totalPnL.toFixed(2)}`,
+      `Win rate: ${winRate}%`,
+      `Wins: ${wins} | Losses: ${losses}`,
+      `Open: ${openTrades} | Closed: ${closedTrades}`,
+    ];
+
+    y = 62;
+    summary.forEach((line) => {
+      doc.text(line, margin, y);
+      y += 14;
+    });
+
+    y += 18;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("Trades", margin, y - 4);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    y += 10;
+
+    let x = margin;
+    columns.forEach((column) => {
+      doc.setFillColor(240, 240, 240);
+      doc.rect(x, y, column.width, headerHeight, "F");
+      doc.setTextColor(0, 0, 0);
+      doc.text(column.key, x + 4, y + 13);
+      x += column.width;
+    });
+    y += headerHeight;
+
+    tableRows.forEach((row) => {
+      x = margin;
+      if (y > pageHeight - 30) {
+        doc.addPage();
+        y = 30;
+      }
+
+      columns.forEach((column) => {
+        const value = String(row[column.key] ?? "-");
+        doc.rect(x, y, column.width, rowHeight);
+        doc.text(value, x + 4, y + 12);
+        x += column.width;
+      });
+      y += rowHeight;
+    });
+
+    doc.save("trading-journal.pdf");
     showToast(t.exportPdf);
   }
 }
