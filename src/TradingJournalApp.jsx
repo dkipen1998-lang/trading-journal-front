@@ -750,6 +750,7 @@ const STYLE = `
 }
 .tj-display { font-family: 'Space Grotesk', sans-serif; }
 .tj-mono { font-family: 'IBM Plex Mono', monospace; }
+.tj-ticker { font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.5px; min-width: 40px; display: inline-block; text-align: center; }
 
 .tj-phone {
   width: 100%;
@@ -3206,7 +3207,7 @@ export default function TradingJournalApp() {
                     )}
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                        <div className="tj-display" style={{ fontSize: 16, fontWeight: 700 }}>{item.symbol}</div>
+                        <div className="tj-ticker" style={{ fontSize: 16, fontWeight: 700 }}>{item.symbol}</div>
                         {item.price != null ? (
                           <span style={{ fontSize: 13, color: item.price < 0 ? "var(--loss)" : "var(--profit)" }}>{formatStockPrice(item.price, item.currency || "USD")}</span>
                         ) : (
@@ -3586,7 +3587,7 @@ const TradeRow = React.memo(function TradeRow({ trade, onClick, t }) {
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 5, flexWrap: "wrap" }}>
-          <span className="tj-display" style={{ fontWeight: 700, fontSize: 15, color: "var(--text)" }}>{trade.ticker}</span>
+          <span className="tj-ticker" style={{ fontWeight: 700, fontSize: 15, color: "var(--text)" }}>{trade.ticker}</span>
           <SideBadge side={trade.side} />
           <StatusBadge status={trade.status} />
         </div>
