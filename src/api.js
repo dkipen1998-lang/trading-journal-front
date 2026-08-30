@@ -377,9 +377,40 @@ export async function fetchChatReply(message, provider) {
 
 const BINANCE_SPOT_BASE = 'https://api.binance.com';
 const BINANCE_FUTURES_BASE = 'https://fapi.binance.com';
+const BINANCE_REQUEST_LIMIT_PER_MINUTE = 5;
+const BINANCE_REQUEST_WINDOW_MS = 60_000;
+const BINANCE_REQUEST_TIMESTAMPS = [];
+
+function getNextBinanceRequestDelay(now = Date.now(), timestamps = BINANCE_REQUEST_TIMESTAMPS) {
+  const recentTimestamps = timestamps.filter((ts) => ts > now - BINANCE_REQUEST_WINDOW_MS);
+  if (recentTimestamps.length < BINANCE_REQUEST_LIMIT_PER_MINUTE) {
+    return 0;
+  }
+
+  const oldest = recentTimestamps[0];
+  return Math.max(0, BINANCE_REQUEST_WINDOW_MS - (now - oldest));
+}
+
+async function waitForBinanceRequestSlot() {
+  while (true) {
+    const now = Date.now();
+    const recentTimestamps = BINANCE_REQUEST_TIMESTAMPS.filter((ts) => ts > now - BINANCE_REQUEST_WINDOW_MS);
+    const delay = getNextBinanceRequestDelay(now, recentTimestamps);
+
+    if (delay === 0) {
+      recentTimestamps.push(now);
+      BINANCE_REQUEST_TIMESTAMPS.length = 0;
+      BINANCE_REQUEST_TIMESTAMPS.push(...recentTimestamps);
+      return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+}
 
 async function requestBinance(path, { futures = false } = {}) {
   try {
+    await waitForBinanceRequestSlot();
     const base = futures ? BINANCE_FUTURES_BASE : BINANCE_SPOT_BASE;
     const response = await fetch(`${base}${path}`);
     if (!response.ok) {

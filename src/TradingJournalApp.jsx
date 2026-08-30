@@ -2409,6 +2409,8 @@ export default function TradingJournalApp() {
         timeframe: t.timeframe,
         setup: t.setup,
         notes: t.notes,
+        entryScreenshot: t.entryScreenshot || undefined,
+        exitScreenshot: t.exitScreenshot || undefined,
         instrumentType: inferInstrumentType(t.ticker, t.entryPrice),
         profileId: activeProfileId || undefined,
         tags: t.tags || [],
