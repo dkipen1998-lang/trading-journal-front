@@ -1495,27 +1495,10 @@ export default function TradingJournalApp() {
   const [editTrade, setEditTrade] = useState(null);
   const [search, setSearch] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
-  const [filters, setFilters] = useState(() => {
-    const defaultFilters = { status: "all", side: "all", result: "all", setup: "all", tag: "all", dateFrom: "", dateTo: "" };
-    if (typeof window === "undefined") return defaultFilters;
-    try {
-      const savedUser = readUserSettings(getUser()?.id)?.filters;
-      if (savedUser) return { ...defaultFilters, ...savedUser };
-      const raw = window.localStorage.getItem("tj-filters");
-      if (raw) {
-        const savedLocal = JSON.parse(raw);
-        return { ...defaultFilters, ...savedLocal };
-      }
-    } catch {
-      // ignore malformed stored filters and fall back to defaults
-    }
-    return defaultFilters;
-  });
-  const [incomePeriod, setIncomePeriod] = useState(() => {
-    if (typeof window === "undefined") return "30d";
-    const saved = readUserSettings(getUser()?.id)?.incomePeriod;
-    return saved || "30d";
-  });
+  const getDefaultFilters = () => ({ status: "all", side: "all", result: "all", setup: "all", tag: "all", dateFrom: "", dateTo: "" });
+  const [filters, setFilters] = useState(() => getDefaultFilters());
+  const getDefaultIncomePeriod = () => "month";
+  const [incomePeriod, setIncomePeriod] = useState(() => getDefaultIncomePeriod());
   const [defaultRiskPerTrade, setDefaultRiskPerTrade] = useState(() => {
     if (typeof window === "undefined") return "";
     try {
@@ -2444,8 +2427,8 @@ export default function TradingJournalApp() {
     const settings = {
       language,
       defaultRiskPerTrade,
-      incomePeriod,
-      filters,
+      incomePeriod: getDefaultIncomePeriod(),
+      filters: getDefaultFilters(),
       tab,
       activeProfileId,
       standardProfile,
@@ -2453,12 +2436,12 @@ export default function TradingJournalApp() {
 
     if (typeof window !== "undefined") {
       try {
-        window.localStorage.setItem("tj-filters", JSON.stringify(filters));
+        window.localStorage.setItem("tj-filters", JSON.stringify(getDefaultFilters()));
       } catch {}
     }
 
     writeUserSettings(currentUserId, settings);
-  }, [user?.id, language, defaultRiskPerTrade, incomePeriod, filters, tab, activeProfileId, standardProfile]);
+  }, [user?.id, language, defaultRiskPerTrade, tab, activeProfileId, standardProfile]);
 
   // Keep global dark background to match app
   useEffect(() => {
