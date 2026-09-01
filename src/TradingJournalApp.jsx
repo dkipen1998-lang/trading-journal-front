@@ -3481,10 +3481,11 @@ function computeStats(trades, defaultRiskPerTrade, accountSize) {
   const grossLoss = Math.abs(losses.reduce((sum, value) => sum + value, 0));
   const profitFactor = grossLoss ? grossWin / grossLoss : grossWin > 0 ? Infinity : 0;
   const expectancy = closed.length ? totalPnl / closed.length : 0;
-  const rTrades = closed.filter((trade) => trade.rMultiple != null);
-  const avgR = rTrades.length ? rTrades.reduce((sum, trade) => sum + trade.rMultiple, 0) / rTrades.length : 0;
-  const best = closed.length ? closed.reduce((a, b) => (b.pnl > a.pnl ? b : a)) : null;
-  const worst = closed.length ? closed.reduce((a, b) => (b.pnl < a.pnl ? b : a)) : null;
+  const validClosed = closed.filter((trade) => Number.isFinite(Number(trade.pnl)));
+  const rTrades = validClosed.filter((trade) => Number.isFinite(Number(trade.rMultiple)));
+  const avgR = rTrades.length ? rTrades.reduce((sum, trade) => sum + Number(trade.rMultiple), 0) / rTrades.length : 0;
+  const best = validClosed.length ? validClosed.reduce((a, b) => (Number(b.pnl) > Number(a.pnl) ? b : a)) : null;
+  const worst = validClosed.length ? validClosed.reduce((a, b) => (Number(b.pnl) < Number(a.pnl) ? b : a)) : null;
 
   const chrono = [...closed].sort((a, b) => new Date(a.exitDate) - new Date(b.exitDate));
   let curStreak = 0, maxWinStreak = 0, maxLossStreak = 0, curType = null;
