@@ -3439,22 +3439,29 @@ function resolveTradeRisk(trade, defaultRiskPerTrade) {
   return Number.isFinite(raw) && raw > 0 ? raw : null;
 }
 
+function safeFiniteNumber(value, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 function getRiskAdjustedPnl(trade, defaultRiskPerTrade) {
-  if (trade.pnl == null || trade.pnl === "") return 0;
+  const pnl = safeFiniteNumber(trade.pnl, 0);
+  if (pnl === 0) return 0;
+
   const defaultRisk = resolveRiskValue(defaultRiskPerTrade);
   if (defaultRisk && defaultRisk > 0) {
-    return Number(trade.pnl) / defaultRisk;
+    return pnl / defaultRisk;
   }
   const risk = resolveTradeRisk(trade, defaultRiskPerTrade);
-  return risk && risk > 0 ? Number(trade.pnl) / risk : Number(trade.pnl) || 0;
+  return risk && risk > 0 ? pnl / risk : pnl;
 }
 
 function computeStats(trades, defaultRiskPerTrade, accountSize) {
-  const closed = trades.filter((trade) => trade.status === "closed" && trade.pnl != null);
+  const closed = trades.filter((trade) => trade.status === "closed" && Number.isFinite(Number(trade.pnl)));
   const open = trades.filter((trade) => trade.status === "open");
   const adjustedPnls = closed.map((trade) => getRiskAdjustedPnl(trade, defaultRiskPerTrade));
-  const totalPnl = adjustedPnls.reduce((sum, value) => sum + value, 0);
-  const totalPnlDollar = closed.reduce((sum, trade) => sum + Number(trade.pnl || 0), 0);
+  const totalPnl = adjustedPnls.reduce((sum, value) => sum + safeFiniteNumber(value, 0), 0);
+  const totalPnlDollar = closed.reduce((sum, trade) => sum + safeFiniteNumber(trade.pnl, 0), 0);
   const currentDeposit = accountSize != null && Number.isFinite(Number(accountSize))
     ? Number(accountSize) + totalPnlDollar
     : undefined;
@@ -3472,20 +3479,20 @@ function computeStats(trades, defaultRiskPerTrade, accountSize) {
     return exitDate && exitDate >= monthStart && exitDate <= now ? sum + Number(trade.pnl || 0) : sum;
   }, 0);
   const totalPnlPct = closed.reduce((sum, trade) => sum + (trade.pnlPercent || 0), 0);
-  const wins = adjustedPnls.filter((value) => value > 0);
-  const losses = adjustedPnls.filter((value) => value <= 0);
+  const wins = adjustedPnls.filter((value) => Number.isFinite(value) && value > 0);
+  const losses = adjustedPnls.filter((value) => Number.isFinite(value) && value <= 0);
   const winRate = closed.length ? (wins.length / closed.length) * 100 : 0;
-  const avgWin = wins.length ? wins.reduce((sum, value) => sum + value, 0) / wins.length : 0;
-  const avgLoss = losses.length ? losses.reduce((sum, value) => sum + value, 0) / losses.length : 0;
-  const grossWin = wins.reduce((sum, value) => sum + value, 0);
-  const grossLoss = Math.abs(losses.reduce((sum, value) => sum + value, 0));
+  const avgWin = wins.length ? wins.reduce((sum, value) => sum + safeFiniteNumber(value, 0), 0) / wins.length : 0;
+  const avgLoss = losses.length ? losses.reduce((sum, value) => sum + safeFiniteNumber(value, 0), 0) / losses.length : 0;
+  const grossWin = wins.reduce((sum, value) => sum + safeFiniteNumber(value, 0), 0);
+  const grossLoss = Math.abs(losses.reduce((sum, value) => sum + safeFiniteNumber(value, 0), 0));
   const profitFactor = grossLoss ? grossWin / grossLoss : grossWin > 0 ? Infinity : 0;
   const expectancy = closed.length ? totalPnl / closed.length : 0;
   const validClosed = closed.filter((trade) => Number.isFinite(Number(trade.pnl)));
   const rTrades = validClosed.filter((trade) => Number.isFinite(Number(trade.rMultiple)));
-  const avgR = rTrades.length ? rTrades.reduce((sum, trade) => sum + Number(trade.rMultiple), 0) / rTrades.length : 0;
-  const best = validClosed.length ? validClosed.reduce((a, b) => (Number(b.pnl) > Number(a.pnl) ? b : a)) : null;
-  const worst = validClosed.length ? validClosed.reduce((a, b) => (Number(b.pnl) < Number(a.pnl) ? b : a)) : null;
+  const avgR = rTrades.length ? rTrades.reduce((sum, trade) => sum + safeFiniteNumber(trade.rMultiple, 0), 0) / rTrades.length : 0;
+  const best = validClosed.length ? validClosed.reduce((a, b) => (safeFiniteNumber(b.pnl, -Infinity) > safeFiniteNumber(a.pnl, -Infinity) ? b : a)) : null;
+  const worst = validClosed.length ? validClosed.reduce((a, b) => (safeFiniteNumber(b.pnl, Infinity) < safeFiniteNumber(a.pnl, Infinity) ? b : a)) : null;
 
   const chrono = [...closed].sort((a, b) => new Date(a.exitDate) - new Date(b.exitDate));
   let curStreak = 0, maxWinStreak = 0, maxLossStreak = 0, curType = null;
