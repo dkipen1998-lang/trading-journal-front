@@ -1775,7 +1775,11 @@ export default function TradingJournalApp() {
       return Number.isFinite(createdAt.getTime()) && createdAt < syncCutoffDate;
     });
 
-    const remoteTradesResult = await fetchTrades(activeProfileId, tradeFetchOptions).catch(() => null);
+    let remoteTradesResult = await fetchTrades(activeProfileId, tradeFetchOptions).catch(() => null);
+    const hasActiveProfile = Boolean(activeProfileId) && localProfiles.some((profile) => profile?.id === activeProfileId);
+    if (!hasActiveProfile && activeProfileId) {
+      remoteTradesResult = await fetchTrades(undefined, tradeFetchOptions).catch(() => null);
+    }
     const normalizedRemoteTrades = Array.isArray(remoteTradesResult) ? remoteTradeListToUnique(remoteTradesResult) : [];
     const remoteTradeMap = new Map(normalizedRemoteTrades.filter(Boolean).map((trade) => [trade.id, trade]));
     const remoteTradeIds = new Set(normalizedRemoteTrades.map((trade) => trade?.id));

@@ -761,9 +761,28 @@ export async function fetchTrades(profileId, options = {}) {
     return profileId ? localTrades.filter((trade) => trade.profileId === profileId) : localTrades;
   }
 
+  const maybeRetryWithoutProfile = async (path) => {
+    try {
+      const response = await request(path);
+      const normalized = normalizeTradeCollection(response);
+      return normalized;
+    } catch {
+      return [];
+    }
+  };
+
   try {
     const response = await request(`/trades${query}`);
     const normalized = normalizeTradeCollection(response);
+    const noResultFromProfile = Boolean(profileId) && Array.isArray(normalized) && normalized.length === 0 && !options.updatedSince;
+
+    if (noResultFromProfile) {
+      const fallback = await maybeRetryWithoutProfile('/trades');
+      if (Array.isArray(fallback) && fallback.length > 0) {
+        return fallback;
+      }
+    }
+
     return normalized;
   } catch {
     return localTrades;
