@@ -1778,6 +1778,10 @@ export default function TradingJournalApp() {
     let remoteTradesResult = await fetchTrades(activeProfileId, tradeFetchOptions).catch(() => null);
     const hasActiveProfile = Boolean(activeProfileId) && localProfiles.some((profile) => profile?.id === activeProfileId);
     if (!hasActiveProfile && activeProfileId) {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("tj-active-profile", "");
+      }
+      setActiveProfileId("");
       remoteTradesResult = await fetchTrades(undefined, tradeFetchOptions).catch(() => null);
     }
     const normalizedRemoteTrades = Array.isArray(remoteTradesResult) ? remoteTradeListToUnique(remoteTradesResult) : [];
@@ -2600,9 +2604,19 @@ export default function TradingJournalApp() {
       });
 
       if (created && typeof created === "object" && created.id) {
-        setTrades((prev) => prev.map((trade) => trade.id === optimisticTrade.id ? { ...optimisticTrade, ...created } : trade));
+        setTrades((prev) => {
+          const withoutOptimistic = prev.filter((trade) => trade.id !== optimisticTrade.id);
+          const serverTrade = {
+            ...optimisticTrade,
+            ...created,
+            id: created.id,
+            profileId: created.profileId ?? optimisticTrade.profileId,
+            status: created.status ?? optimisticTrade.status,
+          };
+          return [serverTrade, ...withoutOptimistic];
+        });
       }
-        showToast(t.tradeAdded);
+      showToast(t.tradeAdded);
     } catch (err) {
       showToast(err.message || t.failedAddTrade);
     } finally {
@@ -2874,6 +2888,9 @@ export default function TradingJournalApp() {
   useEffect(() => {
     const profile = activeProfileId ? profiles.find((item) => item.id === activeProfileId) : null;
     if (activeProfileId && !profile) {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("tj-active-profile", "");
+      }
       setActiveProfileId("");
       return;
     }
