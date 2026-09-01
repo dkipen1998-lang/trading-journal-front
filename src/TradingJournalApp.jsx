@@ -2555,6 +2555,7 @@ export default function TradingJournalApp() {
     setIsSavingTrade(true);
 
     const riskDollar = resolveRiskValue(t.riskDollar) ?? resolveRiskValue(defaultRiskPerTrade);
+    const normalizedProfileId = activeProfileId === STANDARD_PROFILE_ID ? "" : activeProfileId || undefined;
     const optimisticTrade = {
       ...t,
       instrumentType: inferInstrumentType(t.ticker, t.entryPrice),
@@ -2564,7 +2565,7 @@ export default function TradingJournalApp() {
       pnl: null,
       pnlPercent: null,
       rMultiple: null,
-      profileId: activeProfileId || undefined,
+      profileId: normalizedProfileId,
       tags: t.tags || [],
     };
 
@@ -2590,7 +2591,7 @@ export default function TradingJournalApp() {
         entryScreenshot: t.entryScreenshot || undefined,
         exitScreenshot: t.exitScreenshot || undefined,
         instrumentType: inferInstrumentType(t.ticker, t.entryPrice),
-        profileId: activeProfileId || undefined,
+        profileId: activeProfileId === STANDARD_PROFILE_ID ? "" : activeProfileId || undefined,
         tags: t.tags || [],
       });
 
@@ -2740,7 +2741,12 @@ export default function TradingJournalApp() {
   const filtered = useMemo(() => {
     let out = Array.isArray(trades) ? trades : [];
     if (activeProfileId) {
-      out = out.filter((trade) => trade.profileId === activeProfileId);
+      out = out.filter((trade) => {
+        if (activeProfileId === STANDARD_PROFILE_ID) {
+          return !trade.profileId || trade.profileId === "" || trade.profileId === STANDARD_PROFILE_ID;
+        }
+        return trade.profileId === activeProfileId;
+      });
     }
     if (deferredSearch.trim()) {
       const q = deferredSearch.toLowerCase();
