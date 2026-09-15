@@ -56,6 +56,8 @@ const LOCAL_PROFILES_KEY = 'tj-profiles';
 const LOCAL_TRADES_HASH_KEY = 'tj-trades-hash';
 const LOCAL_PROFILES_HASH_KEY = 'tj-profiles-hash';
 const LOCAL_TRADES_LAST_SYNC_KEY = 'tj-trades-last-sync';
+const LOCAL_TRADE_IMAGES_KEY = 'tj-trade-images';
+const LOCAL_BACKUP_KEY = 'tj-local-backup-v1';
 
 function normalizeLocalCollection(value) {
   if (!value) return [];
@@ -72,6 +74,71 @@ function collectionToHash(items) {
     }
     return acc;
   }, {});
+}
+
+function readLocalTradeImages() {
+  if (typeof window === 'undefined') return {};
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(LOCAL_TRADE_IMAGES_KEY) || '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeLocalTradeImages(images) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(LOCAL_TRADE_IMAGES_KEY, JSON.stringify(images));
+  } catch {
+    // Image storage can exceed browser quota; the trade itself should still save.
+  }
+}
+
+function hydrateLocalTradeImages(trades, imageSource = readLocalTradeImages()) {
+  const images = imageSource || {};
+  return (Array.isArray(trades) ? trades : []).map((trade) => {
+    const stored = trade?.id ? images[trade.id] : null;
+    if (!stored) return trade;
+    return {
+      ...trade,
+      ...(stored.entryScreenshot ? { entryScreenshot: stored.entryScreenshot } : {}),
+      ...(stored.exitScreenshot ? { exitScreenshot: stored.exitScreenshot } : {}),
+    };
+  });
+}
+
+function stripLocalTradeImages(trade) {
+  if (!trade || typeof trade !== 'object') return trade;
+  const { entryScreenshot, exitScreenshot, ...payload } = trade;
+  return payload;
+}
+
+function readLocalBackupSnapshot() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(LOCAL_BACKUP_KEY) || 'null');
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeLocalBackupSnapshot() {
+  if (typeof window === 'undefined') return;
+  try {
+    const trades = normalizeLocalCollection(JSON.parse(window.localStorage.getItem(LOCAL_TRADES_HASH_KEY) || '{}'));
+    const profiles = normalizeLocalCollection(JSON.parse(window.localStorage.getItem(LOCAL_PROFILES_HASH_KEY) || '{}'));
+    window.localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify({
+      version: 1,
+      savedAt: new Date().toISOString(),
+      trades,
+      profiles,
+      images: readLocalTradeImages(),
+    }));
+  } catch {
+    // Backup must never prevent normal local saving.
+  }
 }
 
 function migrateCollectionToHash(raw, hashKey) {
@@ -95,6 +162,10 @@ export function readLocalProfiles() {
       return normalizeLocalCollection(JSON.parse(hashRaw));
     }
     const raw = window.localStorage.getItem(LOCAL_PROFILES_KEY);
+    if (!hashRaw && !raw) {
+      const backup = readLocalBackupSnapshot();
+      if (Array.isArray(backup?.profiles)) return backup.profiles;
+    }
     const arrayData = normalizeLocalCollection(JSON.parse(raw || '[]'));
     if (raw) {
       migrateCollectionToHash(raw, LOCAL_PROFILES_HASH_KEY);
@@ -110,6 +181,7 @@ function writeLocalProfiles(profiles) {
   const hash = collectionToHash(profiles);
   window.localStorage.setItem(LOCAL_PROFILES_HASH_KEY, JSON.stringify(hash));
   window.localStorage.setItem(LOCAL_PROFILES_KEY, JSON.stringify(profiles));
+  writeLocalBackupSnapshot();
 }
 
 function isStatusNotFound(status) {
@@ -149,14 +221,18 @@ export function readLocalTrades() {
   try {
     const hashRaw = window.localStorage.getItem(LOCAL_TRADES_HASH_KEY);
     if (hashRaw) {
-      return filterNotFoundTrades(normalizeLocalCollection(JSON.parse(hashRaw)));
+      return filterNotFoundTrades(hydrateLocalTradeImages(normalizeLocalCollection(JSON.parse(hashRaw))));
     }
     const raw = window.localStorage.getItem(LOCAL_TRADES_KEY);
+    if (!hashRaw && !raw) {
+      const backup = readLocalBackupSnapshot();
+      if (Array.isArray(backup?.trades)) return hydrateLocalTradeImages(backup.trades, backup.images);
+    }
     const arrayData = normalizeLocalCollection(JSON.parse(raw || '[]'));
     if (raw) {
       migrateCollectionToHash(raw, LOCAL_TRADES_HASH_KEY);
     }
-    return filterNotFoundTrades(arrayData);
+    return filterNotFoundTrades(hydrateLocalTradeImages(arrayData));
   } catch {
     return [];
   }
@@ -164,9 +240,29 @@ export function readLocalTrades() {
 
 function writeLocalTrades(trades) {
   if (typeof window === 'undefined') return;
-  const hash = collectionToHash(trades);
+  const images = readLocalTradeImages();
+  const localTrades = (Array.isArray(trades) ? trades : []).map((trade) => {
+    if (!trade || typeof trade !== 'object') return trade;
+    if (trade.id) {
+      const current = images[trade.id] || {};
+      if (Object.prototype.hasOwnProperty.call(trade, 'entryScreenshot')) {
+        if (trade.entryScreenshot) current.entryScreenshot = trade.entryScreenshot;
+        else delete current.entryScreenshot;
+      }
+      if (Object.prototype.hasOwnProperty.call(trade, 'exitScreenshot')) {
+        if (trade.exitScreenshot) current.exitScreenshot = trade.exitScreenshot;
+        else delete current.exitScreenshot;
+      }
+      if (current.entryScreenshot || current.exitScreenshot) images[trade.id] = current;
+      else delete images[trade.id];
+    }
+    return stripLocalTradeImages(trade);
+  });
+  writeLocalTradeImages(images);
+  const hash = collectionToHash(localTrades);
   window.localStorage.setItem(LOCAL_TRADES_HASH_KEY, JSON.stringify(hash));
-  window.localStorage.setItem(LOCAL_TRADES_KEY, JSON.stringify(trades));
+  window.localStorage.setItem(LOCAL_TRADES_KEY, JSON.stringify(localTrades));
+  writeLocalBackupSnapshot();
 }
 
 export function persistLocalProfiles(profiles) {
@@ -886,10 +982,10 @@ export async function createTrade(trade) {
 
   const created = await request('/trades', {
     method: 'POST',
-    body: JSON.stringify(trade),
+    body: JSON.stringify(stripLocalTradeImages(trade)),
   });
   if (created && typeof created === 'object') {
-    upsertLocalTrade(created);
+    upsertLocalTrade({ ...created, entryScreenshot: trade.entryScreenshot, exitScreenshot: trade.exitScreenshot });
   }
   return created;
 }
@@ -907,10 +1003,10 @@ export async function updateTrade(id, trade) {
   try {
     const updated = await request(`/trades/${id}`, {
       method: 'PATCH',
-      body: JSON.stringify(trade),
+      body: JSON.stringify(stripLocalTradeImages(trade)),
     });
     if (updated && typeof updated === 'object') {
-      upsertLocalTrade({ ...updated, id: updated.id || id });
+      upsertLocalTrade({ ...updated, ...trade, id: updated.id || id });
     }
     return updated;
   } catch (error) {
@@ -935,10 +1031,10 @@ export async function closeTrade(id, payload) {
   try {
     const updated = await request(`/trades/${id}/close`, {
       method: 'PATCH',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(stripLocalTradeImages(payload)),
     });
     if (updated && typeof updated === 'object') {
-      upsertLocalTrade({ ...updated, id: updated.id || id, status: 'closed' });
+      upsertLocalTrade({ ...updated, ...payload, id: updated.id || id, status: 'closed' });
     }
     return updated;
   } catch (error) {

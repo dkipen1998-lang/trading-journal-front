@@ -379,7 +379,21 @@ const TradeRow = React.memo(function TradeRow({ trade, onClick, t }) {
 
 export function DashboardScreen({ stats, search, setSearch, onOpenFilter, onOpenDetail, filtersActive, filtered, goJournal, incomePeriod, setIncomePeriod, periodPnlStats, t, defaultRiskPerTrade, setDefaultRiskPerTrade }) {
   const [statsOpen, setStatsOpen] = useState(false);
-  const recent = useMemo(() => filtered.slice(0, 6), [filtered]);
+  const recent = useMemo(() => {
+    const today = todayISO();
+    return filtered
+      .filter((trade) => trade.status === "open" || trade.entryDate === today || trade.exitDate === today)
+      .sort((a, b) => {
+        const aOpen = a.status === "open" ? 1 : 0;
+        const bOpen = b.status === "open" ? 1 : 0;
+        if (aOpen !== bOpen) return bOpen - aOpen;
+
+        const aDate = a.entryDate ? new Date(`${a.entryDate}T${a.entryTime || "00:00"}:00`).getTime() : 0;
+        const bDate = b.entryDate ? new Date(`${b.entryDate}T${b.entryTime || "00:00"}:00`).getTime() : 0;
+        return bDate - aDate;
+      })
+      .slice(0, 6);
+  }, [filtered]);
   const labels = t || FALLBACK_LABELS;
   return (
     <div style={{ paddingBottom: 100 }}>

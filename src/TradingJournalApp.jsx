@@ -2620,7 +2620,7 @@ export default function TradingJournalApp() {
     try {
       const updated = await updateTrade(id, normalizedPatch);
       if (updated && typeof updated === "object" && updated.id) {
-        setTrades((prev) => prev.map((trade) => (trade.id === id ? updated : trade)));
+        setTrades((prev) => prev.map((trade) => (trade.id === id ? { ...trade, ...updated, ...normalizedPatch } : trade)));
       } else {
         setTrades((prev) => prev.map((trade) => (trade.id === id ? { ...trade, ...normalizedPatch } : trade)));
       }
