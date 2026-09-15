@@ -1133,6 +1133,22 @@ export function TradeForm({ mode, initial, setups, setSetups, tags, setTags, onC
     const positionSize = Math.max(1, Math.round(riskDollar / riskPerShare));
     if (String(form.positionSize) !== String(positionSize)) setValue("positionSize", positionSize);
   }, [form.entryPrice, form.stopLoss, form.riskDollar, form.side]);
+  useEffect(() => {
+    const entryPrice = Number(form.entryPrice);
+    const positionSize = Number(form.positionSize);
+    const riskDollar = Number(form.riskDollar || defaultRiskPerTrade);
+    if (form.stopLoss || !Number.isFinite(entryPrice) || entryPrice <= 0 || !Number.isFinite(positionSize) || positionSize <= 0 || !Number.isFinite(riskDollar) || riskDollar <= 0) return;
+
+    const riskPerShare = riskDollar / positionSize;
+    const stopLoss = form.side === "short" ? entryPrice + riskPerShare : entryPrice - riskPerShare;
+    if (stopLoss > 0) setValue("stopLoss", String(+stopLoss.toFixed(4)));
+  }, [form.entryPrice, form.positionSize, form.riskDollar, form.side, form.stopLoss, defaultRiskPerTrade]);
+  const positionNotional = (() => {
+    const entryPrice = Number(form.entryPrice);
+    const positionSize = Number(form.positionSize);
+    if (!Number.isFinite(entryPrice) || entryPrice <= 0 || !Number.isFinite(positionSize) || positionSize <= 0) return null;
+    return +(entryPrice * positionSize).toFixed(2);
+  })();
   const computedRisk = (() => {
     const entryPrice = Number(form.entryPrice);
     const stopLoss = Number(form.stopLoss);
@@ -1178,7 +1194,7 @@ export function TradeForm({ mode, initial, setups, setSetups, tags, setTags, onC
             <NumField label={labels.riskDollar} value={form.riskDollar} onChange={(value) => setValue("riskDollar", value)} />
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-            <div><label className="tj-label">{labels.positionNotional}</label><div className="tj-input tj-input-compact tj-mono" style={{ display: "flex", alignItems: "center", minHeight: 34, color: "var(--text-dim)" }}>{computedRisk ? `$${computedRisk.notional}` : "—"}</div></div>
+            <div><label className="tj-label">{labels.positionNotional}</label><div className="tj-input tj-input-compact tj-mono" style={{ display: "flex", alignItems: "center", minHeight: 34, color: "var(--text-dim)" }}>{positionNotional != null ? `$${positionNotional}` : "—"}</div></div>
             <NumField label={labels.positionSize} value={form.positionSize} onChange={(value) => setValue("positionSize", value)} />
           </div>
           <div className="tj-card" style={{ padding: 10, marginBottom: 12, borderColor: "var(--accent-dim)" }}>
